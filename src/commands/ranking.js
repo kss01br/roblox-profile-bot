@@ -24,28 +24,6 @@ async function fetchJson(url, options = {}) {
   return response.json();
 }
 
-async function getUniverseIds(placeIds) {
-  const url = "https://apis.roblox.com/universes/v1/places/universe";
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      placeIds: placeIds.map(Number),
-    }),
-  });
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`Erro ${response.status} em ${url}\n${text}`);
-  }
-
-  const data = await response.json();
-  return data.data || [];
-}
-
 async function getUniverseStats(universeIds) {
   const chunks = chunkArray(universeIds, 100);
   const allGames = [];
@@ -74,7 +52,7 @@ module.exports = {
         .setDescription("Quantidade de mapas no ranking")
         .setRequired(false)
         .setMinValue(1)
-        .setMaxValue(18)
+        .setMaxValue(19)
     ),
 
   async execute(interaction) {
@@ -83,35 +61,24 @@ module.exports = {
     await interaction.deferReply();
 
     try {
-      const placeIds = maps.map((map) => map.placeId);
+      const universeIds = maps
+        .map((map) => map.universeId)
+        .filter(Boolean)
+        .map(String);
 
-      const universeData = await getUniverseIds(placeIds);
-
-      const universeMap = new Map(
-        universeData.map((item) => [Number(item.placeId), Number(item.universeId)])
-      );
-
-      const mapsWithUniverse = maps
-        .map((map) => ({
-          ...map,
-          universeId: universeMap.get(Number(map.placeId)) || null,
-        }))
-        .filter((map) => map.universeId);
-
-      if (!mapsWithUniverse.length) {
-        return interaction.editReply("Não consegui converter os placeIds em universeIds.");
+      if (!universeIds.length) {
+        return interaction.editReply("Nenhum universeId válido foi encontrado em maps.js.");
       }
 
-      const universeIds = mapsWithUniverse.map((map) => String(map.universeId));
       const gameStats = await getUniverseStats(universeIds);
 
       const statsByUniverseId = new Map(
-        gameStats.map((game) => [Number(game.id), game])
+        gameStats.map((game) => [String(game.id), game])
       );
 
-      const ranking = mapsWithUniverse
+      const ranking = maps
         .map((map) => {
-          const stats = statsByUniverseId.get(Number(map.universeId));
+          const stats = statsByUniverseId.get(String(map.universeId));
 
           return {
             ...map,
@@ -126,11 +93,14 @@ module.exports = {
       const totalPlayers = ranking.reduce((sum, item) => sum + item.playing, 0);
       const topList = ranking.slice(0, top);
 
+      const medals = ["🥇", "🥈", "🥉"];
+
       const description = topList.length
         ? topList
             .map((item, index) => {
+              const medal = medals[index] || `**${index + 1}.**`;
               return [
-                `**${index + 1}.** ${item.name}`,
+                `${medal} ${item.name}`,
                 `👥 ${formatNumber(item.playing)} jogando agora`,
                 `🔗 https://www.roblox.com/games/${item.placeId}`,
               ].join("\n");
