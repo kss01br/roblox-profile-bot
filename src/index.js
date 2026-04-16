@@ -22,8 +22,12 @@ client.on("interactionCreate", async (interaction) => {
   await interactionCreateHandler(interaction, client);
 });
 
+console.log("TOKEN EXISTS:", !!process.env.DISCORD_TOKEN);
+console.log("CLIENT EXISTS:", !!process.env.CLIENT_ID);
+console.log("GUILD EXISTS:", !!process.env.GUILD_ID);
+
 if (!DISCORD_TOKEN) {
-  console.error("DISCORD_TOKEN não encontrado no .env");
+  console.error("DISCORD_TOKEN não foi encontrado nas variáveis de ambiente");
   process.exit(1);
 }
 
