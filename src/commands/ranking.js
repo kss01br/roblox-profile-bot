@@ -1,6 +1,8 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const maps = require("../data/maps");
 
+const previousPositions = new Map();
+
 function formatNumber(value) {
   return new Intl.NumberFormat("pt-BR").format(value || 0);
 }
@@ -42,6 +44,42 @@ async function getUniverseStats(universeIds) {
   return allGames;
 }
 
+async function getGameIcons(universeIds) {
+  const chunks = chunkArray(universeIds, 100);
+  const allIcons = [];
+
+  for (const chunk of chunks) {
+    const url = new URL("https://thumbnails.roblox.com/v1/games/icons");
+    url.searchParams.set("universeIds", chunk.join(","));
+    url.searchParams.set("returnPolicy", "PlaceHolder");
+    url.searchParams.set("size", "512x512");
+    url.searchParams.set("format", "Png");
+    url.searchParams.set("isCircular", "false");
+
+    const data = await fetchJson(url.toString());
+
+    if (Array.isArray(data?.data)) {
+      allIcons.push(...data.data);
+    }
+  }
+
+  return allIcons;
+}
+
+function getMedal(index) {
+  if (index === 0) return "🥇";
+  if (index === 1) return "🥈";
+  if (index === 2) return "🥉";
+  return `#${index + 1}`;
+}
+
+function getMovementEmoji(currentIndex, previousIndex) {
+  if (previousIndex === undefined) return "🆕";
+  if (currentIndex < previousIndex) return "📈";
+  if (currentIndex > previousIndex) return "📉";
+  return "➖";
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("ranking")
@@ -52,7 +90,7 @@ module.exports = {
         .setDescription("Quantidade de mapas no ranking")
         .setRequired(false)
         .setMinValue(1)
-        .setMaxValue(19)
+        .setMaxValue(10)
     ),
 
   async execute(interaction) {
@@ -70,10 +108,17 @@ module.exports = {
         return interaction.editReply("Nenhum universeId válido foi encontrado em maps.js.");
       }
 
-      const gameStats = await getUniverseStats(universeIds);
+      const [gameStats, gameIcons] = await Promise.all([
+        getUniverseStats(universeIds),
+        getGameIcons(universeIds),
+      ]);
 
       const statsByUniverseId = new Map(
         gameStats.map((game) => [String(game.id), game])
+      );
+
+      const iconsByUniverseId = new Map(
+        gameIcons.map((icon) => [String(icon.targetId), icon.imageUrl || null])
       );
 
       const ranking = maps
@@ -86,6 +131,7 @@ module.exports = {
             visits: stats?.visits ?? 0,
             favoritedCount: stats?.favoritedCount ?? 0,
             rootPlaceId: stats?.rootPlaceId ?? map.placeId,
+            thumbnailUrl: iconsByUniverseId.get(String(map.universeId)) || null,
           };
         })
         .sort((a, b) => b.playing - a.playing);
@@ -93,48 +139,61 @@ module.exports = {
       const totalPlayers = ranking.reduce((sum, item) => sum + item.playing, 0);
       const topList = ranking.slice(0, top);
 
-      const medals = ["🥇", "🥈", "🥉"];
+      const embeds = topList.map((item, index) => {
+        const previousIndex = previousPositions.get(String(item.universeId));
+        const movement = getMovementEmoji(index, previousIndex);
+        const medal = getMedal(index);
+        const fire = index === 0 ? " 🔥" : "";
+        const link = `https://www.roblox.com/games/${item.placeId}`;
 
-      const description = topList.length
-        ? topList
-            .map((item, index) => {
-              const medal = medals[index] || `**${index + 1}.**`;
-              return [
-                `${medal} ${item.name}`,
-                `👥 ${formatNumber(item.playing)} jogando agora`,
-                `🔗 https://www.roblox.com/games/${item.placeId}`,
-              ].join("\n");
-            })
-            .join("\n\n")
-        : "Nenhum mapa encontrado.";
+        const embed = new EmbedBuilder()
+          .setTitle(`${medal} ${item.name}${fire}`)
+          .setURL(link)
+          .setColor(index === 0 ? 0xff6b00 : 0x5865f2)
+          .setDescription(
+            [
+              `👥 ${formatNumber(item.playing)} jogando agora`,
+              `${movement} Movimento no ranking`,
+              `❤️ ${formatNumber(item.favoritedCount)} favoritos`,
+              `👁️ ${formatNumber(item.visits)} visitas`,
+              `🔗 ${link}`,
+            ].join("\n")
+          )
+          .addFields(
+            {
+              name: "Posição",
+              value: String(index + 1),
+              inline: true,
+            },
+            {
+              name: "Mapas monitorados",
+              value: String(ranking.length),
+              inline: true,
+            },
+            {
+              name: "Players somados",
+              value: formatNumber(totalPlayers),
+              inline: true,
+            }
+          )
+          .setFooter({
+            text: `Top ${index + 1} • Ranking por players online no momento`,
+          })
+          .setTimestamp();
 
-      const embed = new EmbedBuilder()
-        .setTitle("🏆 Ranking dos Mapas")
-        .setColor(0x5865f2)
-        .setDescription(description)
-        .addFields(
-          {
-            name: "Mapas monitorados",
-            value: String(ranking.length),
-            inline: true,
-          },
-          {
-            name: "Players somados",
-            value: formatNumber(totalPlayers),
-            inline: true,
-          },
-          {
-            name: "Top exibido",
-            value: String(topList.length),
-            inline: true,
-          }
-        )
-        .setFooter({
-          text: "Ranking por players online no momento",
-        })
-        .setTimestamp();
+        if (item.thumbnailUrl) {
+          embed.setThumbnail(item.thumbnailUrl);
+        }
 
-      await interaction.editReply({ embeds: [embed] });
+        return embed;
+      });
+
+      previousPositions.clear();
+      ranking.forEach((item, index) => {
+        previousPositions.set(String(item.universeId), index);
+      });
+
+      await interaction.editReply({ embeds });
     } catch (error) {
       console.error("Erro ao gerar ranking:");
       console.error(error);
