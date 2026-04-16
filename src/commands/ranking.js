@@ -17,10 +17,23 @@ async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
 
   if (!response.ok) {
-    throw new Error(`Erro ${response.status} em ${url}`);
+    const text = await response.text().catch(() => "");
+    throw new Error(`Erro ${response.status} em ${url}\n${text}`);
   }
 
   return response.json();
+}
+
+function normalizePlaceDetails(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+}
+
+function normalizeGames(payload) {
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload)) return payload;
+  return [];
 }
 
 async function getPlaceDetails(placeIds) {
@@ -32,10 +45,9 @@ async function getPlaceDetails(placeIds) {
     url.searchParams.set("placeIds", chunk.join(","));
 
     const data = await fetchJson(url.toString());
+    const details = normalizePlaceDetails(data);
 
-    if (Array.isArray(data)) {
-      allDetails.push(...data);
-    }
+    allDetails.push(...details);
   }
 
   return allDetails;
@@ -50,10 +62,9 @@ async function getUniverseStats(universeIds) {
     url.searchParams.set("universeIds", chunk.join(","));
 
     const data = await fetchJson(url.toString());
+    const games = normalizeGames(data);
 
-    if (Array.isArray(data?.data)) {
-      allGames.push(...data.data);
-    }
+    allGames.push(...games);
   }
 
   return allGames;
@@ -78,43 +89,56 @@ module.exports = {
     await interaction.deferReply();
 
     try {
-      const placeIds = maps.map((map) => map.placeId);
+      const placeIds = maps.map((map) => String(map.placeId));
       const placeDetails = await getPlaceDetails(placeIds);
 
+      if (!placeDetails.length) {
+        console.log("Place details vazio.");
+        return interaction.editReply("Não consegui obter os detalhes dos mapas.");
+      }
+
       const placeDetailsByPlaceId = new Map(
-        placeDetails.map((item) => [Number(item.placeId), item])
+        placeDetails.map((item) => [String(item.placeId), item])
       );
 
       const mapsWithUniverse = maps
         .map((map) => {
-          const detail = placeDetailsByPlaceId.get(Number(map.placeId));
+          const detail = placeDetailsByPlaceId.get(String(map.placeId));
+
           const universeId =
             detail?.universeId ??
             detail?.universeID ??
             detail?.gameUniverseId ??
+            detail?.universeRootPlaceId ??
             null;
 
           return {
             ...map,
-            universeId: universeId ? Number(universeId) : null,
+            universeId: universeId ? String(universeId) : null,
           };
         })
         .filter((map) => map.universeId);
 
       if (!mapsWithUniverse.length) {
+        console.log("Nenhum universeId encontrado:", placeDetails);
         return interaction.editReply("Não consegui converter os placeIds em universeIds.");
       }
 
-      const universeIds = mapsWithUniverse.map((map) => map.universeId);
+      const universeIds = mapsWithUniverse.map((map) => String(map.universeId));
       const gameStats = await getUniverseStats(universeIds);
 
+      if (!gameStats.length) {
+        console.log("Game stats vazio.");
+        return interaction.editReply("Não consegui obter os players dos mapas.");
+      }
+
       const statsByUniverseId = new Map(
-        gameStats.map((game) => [Number(game.id), game])
+        gameStats.map((game) => [String(game.id), game])
       );
 
       const ranking = mapsWithUniverse
         .map((map) => {
-          const stats = statsByUniverseId.get(Number(map.universeId));
+          const stats = statsByUniverseId.get(String(map.universeId));
 
           return {
             ...map,
@@ -165,7 +189,8 @@ module.exports = {
 
       await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-      console.error("Erro ao gerar ranking:", error);
+      console.error("Erro ao gerar ranking:");
+      console.error(error);
       await interaction.editReply("Erro ao gerar o ranking dos mapas.");
     }
   },
