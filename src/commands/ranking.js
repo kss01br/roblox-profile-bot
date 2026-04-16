@@ -24,6 +24,28 @@ async function fetchJson(url, options = {}) {
   return response.json();
 }
 
+async function getUniverseIds(placeIds) {
+  const url = "https://apis.roblox.com/universes/v1/places/universe";
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      placeIds: placeIds.map(Number),
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`Erro ${response.status} em ${url}\n${text}`);
+  }
+
+  const data = await response.json();
+  return data.data || [];
+}
+
 async function getUniverseStats(universeIds) {
   const chunks = chunkArray(universeIds, 100);
   const allGames = [];
@@ -61,32 +83,42 @@ module.exports = {
     await interaction.deferReply();
 
     try {
-      const universeIds = maps
-        .map((map) => map.universeId || map.placeId)
-        .filter(Boolean)
-        .map(String);
+      const placeIds = maps.map((map) => map.placeId);
 
-      if (!universeIds.length) {
-        return interaction.editReply("Nenhum ID válido foi encontrado em maps.js.");
+      const universeData = await getUniverseIds(placeIds);
+
+      const universeMap = new Map(
+        universeData.map((item) => [Number(item.placeId), Number(item.universeId)])
+      );
+
+      const mapsWithUniverse = maps
+        .map((map) => ({
+          ...map,
+          universeId: universeMap.get(Number(map.placeId)) || null,
+        }))
+        .filter((map) => map.universeId);
+
+      if (!mapsWithUniverse.length) {
+        return interaction.editReply("Não consegui converter os placeIds em universeIds.");
       }
 
+      const universeIds = mapsWithUniverse.map((map) => String(map.universeId));
       const gameStats = await getUniverseStats(universeIds);
 
       const statsByUniverseId = new Map(
-        gameStats.map((game) => [String(game.id), game])
+        gameStats.map((game) => [Number(game.id), game])
       );
 
-      const ranking = maps
+      const ranking = mapsWithUniverse
         .map((map) => {
-          const id = String(map.universeId || map.placeId);
-          const stats = statsByUniverseId.get(id);
+          const stats = statsByUniverseId.get(Number(map.universeId));
 
           return {
             ...map,
             playing: stats?.playing ?? 0,
             visits: stats?.visits ?? 0,
             favoritedCount: stats?.favoritedCount ?? 0,
-            rootPlaceId: stats?.rootPlaceId ?? map.placeId ?? null,
+            rootPlaceId: stats?.rootPlaceId ?? map.placeId,
           };
         })
         .sort((a, b) => b.playing - a.playing);
@@ -97,19 +129,11 @@ module.exports = {
       const description = topList.length
         ? topList
             .map((item, index) => {
-              const linkPlaceId = item.rootPlaceId || item.placeId || "—";
-              const link =
-                linkPlaceId !== "—"
-                  ? `https://www.roblox.com/games/${linkPlaceId}`
-                  : null;
-
               return [
                 `**${index + 1}.** ${item.name}`,
                 `👥 ${formatNumber(item.playing)} jogando agora`,
-                link ? `🔗 ${link}` : null,
-              ]
-                .filter(Boolean)
-                .join("\n");
+                `🔗 https://www.roblox.com/games/${item.placeId}`,
+              ].join("\n");
             })
             .join("\n\n")
         : "Nenhum mapa encontrado.";
