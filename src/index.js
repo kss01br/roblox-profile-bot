@@ -3,6 +3,7 @@ const { DISCORD_TOKEN } = require("./config/env");
 const readyHandler = require("./handlers/ready");
 const interactionCreateHandler = require("./handlers/interactionCreate");
 const robloxCommand = require("./commands/roblox");
+const rankingCommand = require("./commands/ranking");
 
 console.log("readyHandler:", readyHandler);
 console.log("interactionCreateHandler:", interactionCreateHandler);
@@ -13,6 +14,7 @@ const client = new Client({
 
 client.commands = new Collection();
 client.commands.set(robloxCommand.data.name, robloxCommand);
+client.commands.set(rankingCommand.data.name, rankingCommand);
 
 client.once("clientReady", () => {
   readyHandler(client);

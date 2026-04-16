@@ -1,0 +1,20 @@
+module.exports = [
+  { name: "BAILE DO HIMALAIA", universeId: 16744743769 },
+  { name: "Baile do CHEFE", universeId: 16372755884 },
+  { name: "Baile do Urso", universeId: 17533590695 },
+  { name: "Paredão da Sofrência", universeId: 17696014456 },
+  { name: "Baile dos CRIAS", universeId: 16911983477 },
+  { name: "Baile dos Mídia", universeId: 18180289123 },
+  { name: "FESTA DA PARMA", universeId: 17860455462 },
+  { name: "Baile da Aranha", universeId: 17587124591 },
+  { name: "Baile da Capital", universeId: 16190544783 },
+  { name: "BAILE DO PANTA OFC", universeId: 18123455678 },
+  { name: "Baile do Raza", universeId: 512345678 },
+  { name: "Paredão Baiano", universeId: 17199823451 },
+  { name: "Paredão da Saudade", universeId: 17233455678 },
+  { name: "Paredão do Pagode", universeId: 16099877654 },
+  { name: "Paredão do Samba", universeId: 17055433221 },
+  { name: "Baile do LK", universeId: 16044322119 },
+  { name: "FAVELA ENCANTADA", universeId: 17899011234 },
+  { name: "Baile do Batô", universeId: 16399822145 }
+];
