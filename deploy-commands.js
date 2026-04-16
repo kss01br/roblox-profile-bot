@@ -3,8 +3,12 @@ require("dotenv").config();
 
 const { CLIENT_ID, GUILD_ID, DISCORD_TOKEN } = require("./src/config/env");
 const robloxCommand = require("./src/commands/roblox");
+const rankingCommand = require("./src/commands/ranking");
 
-const commands = [robloxCommand.data.toJSON()];
+const commands = [
+  robloxCommand.data.toJSON(),
+  rankingCommand.data.toJSON(),
+];
 
 const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
 
@@ -13,7 +17,7 @@ const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
     console.log("Iniciando registro de comandos...");
     console.log("CLIENT_ID:", CLIENT_ID);
     console.log("GUILD_ID:", GUILD_ID);
-    console.log("Comandos:", commands.map(cmd => cmd.name));
+    console.log("Comandos:", commands.map((cmd) => cmd.name));
 
     const data = await rest.put(
       Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
