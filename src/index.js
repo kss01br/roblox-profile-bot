@@ -7,6 +7,7 @@ const rankingCommand = require("./commands/ranking");
 
 console.log("readyHandler:", readyHandler);
 console.log("interactionCreateHandler:", interactionCreateHandler);
+console.log("rankingCommand:", rankingCommand);
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
@@ -23,10 +24,6 @@ client.once("clientReady", () => {
 client.on("interactionCreate", async (interaction) => {
   await interactionCreateHandler(interaction, client);
 });
-
-console.log("TOKEN EXISTS:", !!process.env.DISCORD_TOKEN);
-console.log("CLIENT EXISTS:", !!process.env.CLIENT_ID);
-console.log("GUILD EXISTS:", !!process.env.GUILD_ID);
 
 if (!DISCORD_TOKEN) {
   console.error("DISCORD_TOKEN não foi encontrado nas variáveis de ambiente");
