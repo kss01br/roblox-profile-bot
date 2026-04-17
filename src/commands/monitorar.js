@@ -136,6 +136,17 @@ module.exports = {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
+      const allowedRoleId = process.env.MONITOR_ALLOWED_ROLE_ID;
+      const memberRoles = interaction.member?.roles?.cache;
+
+      if (!allowedRoleId) {
+        return interaction.editReply("❌ MONITOR_ALLOWED_ROLE_ID não configurado.");
+      }
+
+      if (!memberRoles || !memberRoles.has(allowedRoleId)) {
+        return interaction.editReply("❌ Você não tem o cargo permitido para usar este comando.");
+      }
+
       const nick = interaction.options.getString("nick", true);
       const user = await getUserByUsername(nick);
 

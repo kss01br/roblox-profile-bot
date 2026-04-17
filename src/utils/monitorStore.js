@@ -12,6 +12,7 @@ function write(data) {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
+// ➕ adiciona monitor
 function addMonitor(discordUserId, player) {
   const data = read();
 
@@ -20,7 +21,9 @@ function addMonitor(discordUserId, player) {
   let list = data[discordUserId];
 
   // remove duplicado
-  list = list.filter((p) => p.robloxUserId !== player.robloxUserId);
+  list = list.filter(
+    (p) => p.robloxUserId !== player.robloxUserId
+  );
 
   // mantém só 2
   if (list.length >= 2) {
@@ -40,16 +43,45 @@ function addMonitor(discordUserId, player) {
   return list;
 }
 
+// ❌ remove um player específico
+function removeMonitor(discordUserId, username) {
+  const data = read();
+
+  if (!data[discordUserId]) return [];
+
+  const list = data[discordUserId].filter(
+    (p) => p.username.toLowerCase() !== username.toLowerCase()
+  );
+
+  data[discordUserId] = list;
+  write(data);
+
+  return list;
+}
+
+// 🧹 limpa todos
+function clearMonitor(discordUserId) {
+  const data = read();
+
+  delete data[discordUserId];
+
+  write(data);
+}
+
+// 📊 pega tudo
 function getAll() {
   return read();
 }
 
+// 🔄 atualiza geral
 function update(data) {
   write(data);
 }
 
 module.exports = {
   addMonitor,
+  removeMonitor,
+  clearMonitor,
   getAll,
   update,
 };
