@@ -19,8 +19,10 @@ function addMonitor(discordUserId, player) {
 
   let list = data[discordUserId];
 
+  // remove duplicado
   list = list.filter((p) => p.robloxUserId !== player.robloxUserId);
 
+  // mantém só 2
   if (list.length >= 2) {
     list.sort((a, b) => a.createdAt - b.createdAt);
     list.shift();
@@ -29,6 +31,7 @@ function addMonitor(discordUserId, player) {
   list.push({
     ...player,
     createdAt: Date.now(),
+    lastNotificationAt: 0,
   });
 
   data[discordUserId] = list;

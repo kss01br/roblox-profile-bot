@@ -29,18 +29,44 @@ async function fetchPresence(userIds) {
 async function getPlaceDetails(placeId) {
   if (!placeId) return null;
 
-  const url = new URL("https://games.roblox.com/v1/games/multiget-place-details");
-  url.searchParams.set("placeIds", String(placeId));
+  try {
+    const url = new URL("https://games.roblox.com/v1/games/multiget-place-details");
+    url.searchParams.set("placeIds", String(placeId));
 
-  const res = await fetch(url.toString());
+    const res = await fetch(url.toString());
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Erro ${res.status} ao buscar detalhes do place\n${text}`);
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Erro ${res.status} ao buscar detalhes do place\n${text}`);
+    }
+
+    const data = await res.json();
+    return Array.isArray(data) ? data[0] : null;
+  } catch {
+    return null;
   }
+}
 
-  const data = await res.json();
-  return Array.isArray(data) ? data[0] : null;
+async function getGameIcon(universeId) {
+  if (!universeId) return null;
+
+  try {
+    const url = new URL("https://thumbnails.roblox.com/v1/games/icons");
+    url.searchParams.set("universeIds", String(universeId));
+    url.searchParams.set("returnPolicy", "PlaceHolder");
+    url.searchParams.set("size", "512x512");
+    url.searchParams.set("format", "Png");
+    url.searchParams.set("isCircular", "false");
+
+    const res = await fetch(url.toString());
+
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    return data?.data?.[0]?.imageUrl || null;
+  } catch {
+    return null;
+  }
 }
 
 function getStatusText(type) {
@@ -104,10 +130,14 @@ module.exports = {
       const presence = presenceData?.userPresences?.[0];
 
       let gameName = null;
+      let universeId = null;
+      let thumbnailUrl = null;
 
       if (presence?.placeId) {
         const placeDetails = await getPlaceDetails(presence.placeId);
         gameName = placeDetails?.name || null;
+        universeId = placeDetails?.universeId || null;
+        thumbnailUrl = await getGameIcon(universeId);
       }
 
       const list = addMonitor(interaction.user.id, {
@@ -118,6 +148,8 @@ module.exports = {
         lastPlaceId: presence?.placeId ?? null,
         lastOnline: presence?.lastOnline ?? null,
         lastGameName: gameName,
+        lastUniverseId: universeId,
+        lastThumbnailUrl: thumbnailUrl,
         startedPlayingAt: presence?.userPresenceType === 2 ? Date.now() : null,
       });
 
@@ -157,6 +189,10 @@ module.exports = {
           text: "Limite: 2 jogadores. Se adicionar outro, o mais antigo sai.",
         })
         .setTimestamp();
+
+      if (thumbnailUrl) {
+        embed.setThumbnail(thumbnailUrl);
+      }
 
       await interaction.editReply({
         embeds: [embed],

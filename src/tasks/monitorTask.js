@@ -24,18 +24,41 @@ async function fetchPresence(userIds) {
 async function getPlaceDetails(placeId) {
   if (!placeId) return null;
 
-  const url = new URL("https://games.roblox.com/v1/games/multiget-place-details");
-  url.searchParams.set("placeIds", String(placeId));
+  try {
+    const url = new URL("https://games.roblox.com/v1/games/multiget-place-details");
+    url.searchParams.set("placeIds", String(placeId));
 
-  const res = await fetch(url.toString());
+    const res = await fetch(url.toString());
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Erro ${res.status} ao buscar detalhes do place\n${text}`);
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    return Array.isArray(data) ? data[0] : null;
+  } catch {
+    return null;
   }
+}
 
-  const data = await res.json();
-  return Array.isArray(data) ? data[0] : null;
+async function getGameIcon(universeId) {
+  if (!universeId) return null;
+
+  try {
+    const url = new URL("https://thumbnails.roblox.com/v1/games/icons");
+    url.searchParams.set("universeIds", String(universeId));
+    url.searchParams.set("returnPolicy", "PlaceHolder");
+    url.searchParams.set("size", "512x512");
+    url.searchParams.set("format", "Png");
+    url.searchParams.set("isCircular", "false");
+
+    const res = await fetch(url.toString());
+
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    return data?.data?.[0]?.imageUrl || null;
+  } catch {
+    return null;
+  }
 }
 
 function formatPlayTime(startedAt) {
@@ -91,6 +114,7 @@ module.exports = (client) => {
 
           if (!player) continue;
 
+          const now = Date.now();
           const newPresenceType = presence.userPresenceType ?? null;
           const newPlaceId = presence.placeId ?? null;
 
@@ -104,27 +128,39 @@ module.exports = (client) => {
           }
 
           let gameName = null;
+          let universeId = null;
+          let thumbnailUrl = null;
           let gameLink = null;
 
           if (newPlaceId) {
             const placeDetails = await getPlaceDetails(newPlaceId);
-            gameName = placeDetails?.name || "Jogo desconhecido";
+            gameName = placeDetails?.name || player.lastGameName || "Jogo desconhecido";
+            universeId = placeDetails?.universeId || null;
+            thumbnailUrl = await getGameIcon(universeId);
             gameLink = `https://www.roblox.com/games/${newPlaceId}`;
           }
 
+          // quando entra em jogo vindo de outro estado
           if (newPresenceType === 2 && player.lastPresenceType !== 2) {
-            player.startedPlayingAt = Date.now();
+            player.startedPlayingAt = now;
           }
 
-          if (newPresenceType !== 2) {
-            player.startedPlayingAt = null;
+          const previousStartedPlayingAt = player.startedPlayingAt;
+          const oldGameName = player.lastGameName || "Jogo anterior desconhecido";
+
+          // anti-spam simples: ignora notificação se acabou de mandar uma há menos de 60s
+          if (player.lastNotificationAt && now - player.lastNotificationAt < 60000) {
+            player.lastPresenceType = newPresenceType;
+            player.lastPlaceId = newPlaceId;
+            player.lastOnline = presence.lastOnline ?? null;
+            player.lastGameName = gameName;
+            player.lastUniverseId = universeId;
+            player.lastThumbnailUrl = thumbnailUrl;
+            continue;
           }
 
           const user = await client.users.fetch(discordUserId).catch(() => null);
           if (!user) continue;
-
-          const oldGameName = player.lastGameName || "Jogo anterior desconhecido";
-          const playTime = formatPlayTime(player.startedPlayingAt);
 
           const embed = new EmbedBuilder()
             .setTitle("👁️ Atualização de monitoramento")
@@ -132,6 +168,7 @@ module.exports = (client) => {
 
           let components = [];
 
+          // mudou de jogo
           if (
             player.lastPresenceType === 2 &&
             newPresenceType === 2 &&
@@ -147,13 +184,18 @@ module.exports = (client) => {
                   inline: false,
                 },
                 {
+                  name: "Ficou jogando por",
+                  value: formatPlayTime(previousStartedPlayingAt),
+                  inline: true,
+                },
+                {
                   name: "Entrou em",
                   value: gameName || "Jogo desconhecido",
                   inline: false,
                 },
                 {
                   name: "⏱️ Jogando há",
-                  value: playTime,
+                  value: "agora mesmo",
                   inline: true,
                 }
               );
@@ -167,7 +209,11 @@ module.exports = (client) => {
             }
 
             components = buildGameButton(newPlaceId);
-          } else if (newPresenceType === 2) {
+            player.startedPlayingAt = now;
+          }
+
+          // entrou em jogo
+          else if (newPresenceType === 2) {
             embed
               .setColor(0x57f287)
               .setDescription(`🎮 **${player.username}** entrou em um jogo`)
@@ -179,7 +225,7 @@ module.exports = (client) => {
                 },
                 {
                   name: "⏱️ Jogando há",
-                  value: playTime,
+                  value: formatPlayTime(player.startedPlayingAt),
                   inline: true,
                 }
               );
@@ -193,26 +239,52 @@ module.exports = (client) => {
             }
 
             components = buildGameButton(newPlaceId);
-          } else if (newPresenceType === 1) {
+          }
+
+          // ficou online
+          else if (newPresenceType === 1) {
             embed
               .setColor(0x3498db)
               .setDescription(`🟢 **${player.username}** ficou online`);
-          } else if (newPresenceType === 0) {
+          }
+
+          // ficou offline
+          else if (newPresenceType === 0) {
             embed
               .setColor(0x95a5a6)
               .setDescription(`⚫ **${player.username}** ficou offline`);
 
             if (player.lastPresenceType === 2 && player.lastGameName) {
-              embed.addFields({
-                name: "Último jogo",
-                value: player.lastGameName,
-                inline: false,
-              });
+              embed.addFields(
+                {
+                  name: "Último jogo",
+                  value: player.lastGameName,
+                  inline: false,
+                },
+                {
+                  name: "Ficou jogando por",
+                  value: formatPlayTime(previousStartedPlayingAt),
+                  inline: true,
+                }
+              );
             }
-          } else if (newPresenceType === 3) {
+
+            player.startedPlayingAt = null;
+          }
+
+          // Studio
+          else if (newPresenceType === 3) {
             embed
               .setColor(0x9b59b6)
               .setDescription(`🛠️ **${player.username}** abriu o Studio`);
+
+            player.startedPlayingAt = null;
+          }
+
+          if (thumbnailUrl) {
+            embed.setThumbnail(thumbnailUrl);
+          } else if (player.lastThumbnailUrl) {
+            embed.setThumbnail(player.lastThumbnailUrl);
           }
 
           await user
@@ -222,10 +294,13 @@ module.exports = (client) => {
             })
             .catch(() => {});
 
+          player.lastNotificationAt = now;
           player.lastPresenceType = newPresenceType;
           player.lastPlaceId = newPlaceId;
           player.lastOnline = presence.lastOnline ?? null;
           player.lastGameName = gameName;
+          player.lastUniverseId = universeId;
+          player.lastThumbnailUrl = thumbnailUrl;
         }
       }
 
@@ -234,5 +309,5 @@ module.exports = (client) => {
       console.error("Erro no monitorTask:");
       console.error(error);
     }
-  }, 30 * 1000);
+  }, 40 * 1000);
 };

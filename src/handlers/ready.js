@@ -21,5 +21,5 @@ module.exports = async (client) => {
       console.error("Erro ao atualizar ranking automático:");
       console.error(error);
     }
-  }, 30 * 1000);
+  }, 20 * 60 * 1000);
 };
