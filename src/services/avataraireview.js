@@ -1,8 +1,14 @@
 const OpenAI = require("openai");
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+function getOpenAI() {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY não definida no .env");
+  }
+
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+}
 
 function toNumber(value, fallback = 0) {
   const num = Number(value);
@@ -75,6 +81,8 @@ function normalizeReview(data) {
 }
 
 async function reviewAvatarImage({ imageUrl, username, displayName, modo = "padrao" }) {
+  const openai = getOpenAI();
+
   const modoInstrucao = {
     padrao: "Seja equilibrado, justo e consistente.",
     rigoroso: "Seja mais exigente. Nota alta só para avatar realmente excepcional.",
