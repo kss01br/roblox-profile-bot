@@ -94,9 +94,9 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    const top = interaction.options.getInteger("top") ?? 10;
-
     await interaction.deferReply();
+
+    const top = interaction.options.getInteger("top") ?? 10;
 
     try {
       const universeIds = maps

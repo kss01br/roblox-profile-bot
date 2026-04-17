@@ -23,26 +23,26 @@ function scoreEmoji(score) {
 
 function listText(items, fallback = "Nada relevante.") {
   if (!Array.isArray(items) || items.length === 0) return fallback;
-  return items.map(item => `• ${item}`).join("\n");
+  return items.map((item) => `• ${item}`).join("\n");
 }
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("avaliaravatar")
     .setDescription("Busca o avatar do perfil Roblox e faz uma avaliação visual com IA")
-    .addStringOption(option =>
+    .addStringOption((option) =>
       option
         .setName("nick")
         .setDescription("Nome do jogador no Roblox")
         .setRequired(false)
     )
-    .addIntegerOption(option =>
+    .addIntegerOption((option) =>
       option
         .setName("id")
         .setDescription("User ID do jogador no Roblox")
         .setRequired(false)
     )
-    .addStringOption(option =>
+    .addStringOption((option) =>
       option
         .setName("modo")
         .setDescription("Estilo da avaliação")
@@ -63,7 +63,7 @@ module.exports = {
       const modo = interaction.options.getString("modo") || "padrao";
 
       if (!nick && !id) {
-        return interaction.editReply("❌ Envie pelo menos um `nick` ou um `id`.");
+        return await interaction.editReply("❌ Envie pelo menos um `nick` ou um `id`.");
       }
 
       let user;
@@ -83,12 +83,12 @@ module.exports = {
         modo,
       });
 
-      const c = review.criterios;
+      const c = review.criterios || {};
 
       const embed = new EmbedBuilder()
         .setTitle(`${scoreEmoji(review.nota_final)} Avaliação Premium do Avatar`)
         .setDescription(
-          `**${user.displayName}** (@${user.username})\nID: \`${user.userId}\`\nModo: \`${modo}\`\n\n${review.resumo}`
+          `**${user.displayName}** (@${user.username})\nID: \`${user.userId}\`\nModo: \`${modo}\`\n\n${review.resumo || "Sem resumo."}`
         )
         .setThumbnail(imageUrl)
         .addFields(
@@ -99,7 +99,7 @@ module.exports = {
           },
           {
             name: "🎖️ Rank",
-            value: review.rank,
+            value: review.rank || "—",
             inline: true,
           },
           {
@@ -162,7 +162,8 @@ module.exports = {
       await interaction.editReply({ embeds: [embed] });
     } catch (error) {
       console.error("Erro no comando /avaliaravatar:", error);
-      await interaction.editReply("❌ Não consegui buscar e avaliar esse avatar.");
+
+      await interaction.editReply("❌ Deu erro ao avaliar esse avatar.");
     }
   },
 };
