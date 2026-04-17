@@ -38,21 +38,13 @@ async function getPlaceDetails(placeId) {
   return Array.isArray(data) ? data[0] : null;
 }
 
-function getStatusText(type) {
-  if (type === 0) return "offline ⚫";
-  if (type === 1) return "online 🟢";
-  if (type === 2) return "entrou em um jogo 🎮";
-  if (type === 3) return "abriu o Studio 🛠️";
-  return "mudou de status";
-}
-
 function formatPlayTime(startedAt) {
-  if (!startedAt) return "agora";
+  if (!startedAt) return "agora mesmo";
 
   const diff = Date.now() - startedAt;
   const minutes = Math.floor(diff / 60000);
 
-  if (minutes < 1) return "agora";
+  if (minutes < 1) return "agora mesmo";
   if (minutes < 60) return `${minutes} min`;
 
   const hours = Math.floor(minutes / 60);
@@ -63,14 +55,16 @@ function formatPlayTime(startedAt) {
 }
 
 function buildGameButton(placeId) {
-  if (!placeId) return null;
+  if (!placeId) return [];
 
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setLabel("Entrar no jogo")
-      .setStyle(ButtonStyle.Link)
-      .setURL(`https://www.roblox.com/games/${placeId}`)
-  );
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setLabel("Entrar no jogo")
+        .setStyle(ButtonStyle.Link)
+        .setURL(`https://www.roblox.com/games/${placeId}`)
+    ),
+  ];
 }
 
 module.exports = (client) => {
@@ -104,6 +98,20 @@ module.exports = (client) => {
             player.lastPresenceType !== newPresenceType ||
             player.lastPlaceId !== newPlaceId;
 
+          if (!changed) {
+            player.lastOnline = presence.lastOnline ?? null;
+            continue;
+          }
+
+          let gameName = null;
+          let gameLink = null;
+
+          if (newPlaceId) {
+            const placeDetails = await getPlaceDetails(newPlaceId);
+            gameName = placeDetails?.name || "Jogo desconhecido";
+            gameLink = `https://www.roblox.com/games/${newPlaceId}`;
+          }
+
           if (newPresenceType === 2 && player.lastPresenceType !== 2) {
             player.startedPlayingAt = Date.now();
           }
@@ -112,86 +120,112 @@ module.exports = (client) => {
             player.startedPlayingAt = null;
           }
 
-          if (changed) {
-            const user = await client.users.fetch(discordUserId).catch(() => null);
+          const user = await client.users.fetch(discordUserId).catch(() => null);
+          if (!user) continue;
 
-            let gameName = null;
-            let gameLink = null;
+          const oldGameName = player.lastGameName || "Jogo anterior desconhecido";
+          const playTime = formatPlayTime(player.startedPlayingAt);
 
-            if (newPlaceId) {
-              const placeDetails = await getPlaceDetails(newPlaceId);
-              gameName = placeDetails?.name || null;
-              gameLink = `https://www.roblox.com/games/${newPlaceId}`;
+          const embed = new EmbedBuilder()
+            .setTitle("👁️ Atualização de monitoramento")
+            .setTimestamp();
+
+          let components = [];
+
+          if (
+            player.lastPresenceType === 2 &&
+            newPresenceType === 2 &&
+            player.lastPlaceId !== newPlaceId
+          ) {
+            embed
+              .setColor(0xf1c40f)
+              .setDescription(`🔄 **${player.username}** mudou de jogo`)
+              .addFields(
+                {
+                  name: "Saiu de",
+                  value: oldGameName,
+                  inline: false,
+                },
+                {
+                  name: "Entrou em",
+                  value: gameName || "Jogo desconhecido",
+                  inline: false,
+                },
+                {
+                  name: "⏱️ Jogando há",
+                  value: playTime,
+                  inline: true,
+                }
+              );
+
+            if (gameLink) {
+              embed.addFields({
+                name: "🔗 Link",
+                value: gameLink,
+                inline: false,
+              });
             }
 
-            if (user) {
-              const oldGameName = player.lastGameName || "Desconhecido";
-              const playTime = formatPlayTime(player.startedPlayingAt);
-
-              const embed = new EmbedBuilder()
-                .setColor(newPresenceType === 2 ? 0x57f287 : 0x5865f2)
-                .setTitle("👁️ Atualização de monitoramento")
-                .setTimestamp();
-
-              if (
-                player.lastPresenceType === 2 &&
-                newPresenceType === 2 &&
-                player.lastPlaceId !== newPlaceId
-              ) {
-                embed.setDescription(`🔄 **${player.username}** mudou de jogo`);
-                embed.addFields(
-                  {
-                    name: "Saiu de",
-                    value: player.lastGameName || "Jogo anterior desconhecido",
-                    inline: false,
-                  },
-                  {
-                    name: "Entrou em",
-                    value: gameName || "Jogo desconhecido",
-                    inline: false,
-                  },
-                  {
-                    name: "Tempo no jogo atual",
-                    value: playTime,
-                    inline: true,
-                  }
-                );
-              } else {
-                embed.setDescription(`🔔 **${player.username}** ${getStatusText(newPresenceType)}`);
-
-                if (gameName) {
-                  embed.addFields({
-                    name: "Jogo",
-                    value: gameName,
-                    inline: false,
-                  });
+            components = buildGameButton(newPlaceId);
+          } else if (newPresenceType === 2) {
+            embed
+              .setColor(0x57f287)
+              .setDescription(`🎮 **${player.username}** entrou em um jogo`)
+              .addFields(
+                {
+                  name: "🎮 Jogo",
+                  value: gameName || "Jogo desconhecido",
+                  inline: false,
+                },
+                {
+                  name: "⏱️ Jogando há",
+                  value: playTime,
+                  inline: true,
                 }
+              );
 
-                if (newPresenceType === 2) {
-                  embed.addFields({
-                    name: "Tempo jogando",
-                    value: playTime,
-                    inline: true,
-                  });
-                }
-              }
-
-              const components = [];
-              const buttonRow = buildGameButton(newPlaceId);
-              if (buttonRow) components.push(buttonRow);
-
-              await user.send({
-                embeds: [embed],
-                components,
-              }).catch(() => {});
+            if (gameLink) {
+              embed.addFields({
+                name: "🔗 Link",
+                value: gameLink,
+                inline: false,
+              });
             }
 
-            player.lastGameName = gameName;
+            components = buildGameButton(newPlaceId);
+          } else if (newPresenceType === 1) {
+            embed
+              .setColor(0x3498db)
+              .setDescription(`🟢 **${player.username}** ficou online`);
+          } else if (newPresenceType === 0) {
+            embed
+              .setColor(0x95a5a6)
+              .setDescription(`⚫ **${player.username}** ficou offline`);
+
+            if (player.lastPresenceType === 2 && player.lastGameName) {
+              embed.addFields({
+                name: "Último jogo",
+                value: player.lastGameName,
+                inline: false,
+              });
+            }
+          } else if (newPresenceType === 3) {
+            embed
+              .setColor(0x9b59b6)
+              .setDescription(`🛠️ **${player.username}** abriu o Studio`);
           }
+
+          await user
+            .send({
+              embeds: [embed],
+              components,
+            })
+            .catch(() => {});
 
           player.lastPresenceType = newPresenceType;
           player.lastPlaceId = newPlaceId;
           player.lastOnline = presence.lastOnline ?? null;
+          player.lastGameName = gameName;
         }
       }
 

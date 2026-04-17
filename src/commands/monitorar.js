@@ -1,4 +1,11 @@
-const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require("discord.js");
+const {
+  SlashCommandBuilder,
+  EmbedBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ActionRowBuilder,
+  MessageFlags,
+} = require("discord.js");
 const { getUserByUsername } = require("../utils/robloxUser");
 const { addMonitor } = require("../utils/monitorStore");
 
@@ -62,6 +69,19 @@ function formatLastOnline(lastOnline) {
   return `há ${days} dia(s)`;
 }
 
+function buildGameButton(placeId) {
+  if (!placeId) return [];
+
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setLabel("Entrar no jogo")
+        .setStyle(ButtonStyle.Link)
+        .setURL(`https://www.roblox.com/games/${placeId}`)
+    ),
+  ];
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("monitorar")
@@ -84,48 +104,64 @@ module.exports = {
       const presence = presenceData?.userPresences?.[0];
 
       let gameName = null;
-      let gameLink = null;
 
       if (presence?.placeId) {
         const placeDetails = await getPlaceDetails(presence.placeId);
         gameName = placeDetails?.name || null;
-        gameLink = `https://www.roblox.com/games/${presence.placeId}`;
       }
 
       const list = addMonitor(interaction.user.id, {
         robloxUserId: String(user.userId),
         username: user.username,
+        displayName: user.displayName,
         lastPresenceType: presence?.userPresenceType ?? null,
         lastPlaceId: presence?.placeId ?? null,
         lastOnline: presence?.lastOnline ?? null,
         lastGameName: gameName,
+        startedPlayingAt: presence?.userPresenceType === 2 ? Date.now() : null,
       });
 
-      const statusText = getStatusText(presence?.userPresenceType ?? -1);
       const monitored = list.map((p, i) => `${i + 1}. ${p.username}`).join("\n");
 
       const embed = new EmbedBuilder()
         .setTitle("👁️ Monitoramento iniciado")
         .setColor(0x5865f2)
-        .setDescription(
-          [
-            `**Jogador:** ${user.displayName || user.username} (@${user.username})`,
-            `**Status atual:** ${statusText}`,
-            `**Último online:** ${formatLastOnline(presence?.lastOnline)}`,
-            gameName ? `**Jogo atual:** ${gameName}` : null,
-            gameLink ? `**Link:** ${gameLink}` : null,
-            "",
-            `**Seus monitoramentos:**`,
-            monitored,
-            "",
-            "⚠️ Limite: 2 jogadores. Se adicionar outro, o mais antigo sai.",
-          ]
-            .filter(Boolean)
-            .join("\n")
+        .addFields(
+          {
+            name: "Jogador",
+            value: `**${user.displayName || user.username}** (@${user.username})`,
+            inline: false,
+          },
+          {
+            name: "Status atual",
+            value: getStatusText(presence?.userPresenceType ?? -1),
+            inline: true,
+          },
+          {
+            name: "Último online",
+            value: formatLastOnline(presence?.lastOnline),
+            inline: true,
+          },
+          {
+            name: "Jogo atual",
+            value: gameName || "Não está em jogo",
+            inline: false,
+          },
+          {
+            name: "Seus monitoramentos",
+            value: monitored || "Nenhum",
+            inline: false,
+          }
         )
+        .setFooter({
+          text: "Limite: 2 jogadores. Se adicionar outro, o mais antigo sai.",
+        })
         .setTimestamp();
 
-      await interaction.editReply({ embeds: [embed] });
+      await interaction.editReply({
+        embeds: [embed],
+        components: buildGameButton(presence?.placeId),
+      });
     } catch (error) {
       console.error("Erro no comando /monitorar:", error);
       await interaction.editReply("❌ Erro ao iniciar monitoramento.");
