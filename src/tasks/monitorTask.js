@@ -21,45 +21,61 @@ async function fetchPresence(userIds) {
   return res.json();
 }
 
-// NOVO: forma mais confiável de pegar nome do jogo
 async function getGameInfo(placeId) {
   if (!placeId) return null;
 
   try {
-    // 1) placeId -> universeId
     const universeRes = await fetch(
       `https://apis.roblox.com/universes/v1/places/${placeId}/universe`
     );
 
-    if (!universeRes.ok) return null;
+    if (universeRes.ok) {
+      const universeData = await universeRes.json();
+      const universeId = universeData?.universeId;
 
-    const universeData = await universeRes.json();
-    const universeId = universeData?.universeId;
+      if (universeId) {
+        const gameRes = await fetch(
+          `https://games.roblox.com/v1/games?universeIds=${universeId}`
+        );
 
-    if (!universeId) return null;
+        if (gameRes.ok) {
+          const gameData = await gameRes.json();
+          const game = gameData?.data?.[0];
 
-    // 2) universeId -> dados do jogo
-    const gameRes = await fetch(
-      `https://games.roblox.com/v1/games?universeIds=${universeId}`
-    );
+          if (game) {
+            return {
+              name: game.name || null,
+              universeId,
+              playing: game.playing ?? null,
+            };
+          }
+        }
 
-    if (!gameRes.ok) return null;
-
-    const gameData = await gameRes.json();
-    const game = gameData?.data?.[0];
-
-    if (!game) {
-      return {
-        name: null,
-        universeId,
-        playing: null,
-      };
+        return {
+          name: null,
+          universeId,
+          playing: null,
+        };
+      }
     }
+  } catch {}
+
+  try {
+    const url = new URL("https://games.roblox.com/v1/games/multiget-place-details");
+    url.searchParams.set("placeIds", String(placeId));
+
+    const res = await fetch(url.toString());
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const place = Array.isArray(data) ? data[0] : null;
+
+    if (!place) return null;
 
     return {
-      name: game.name || null,
-      universeId,
-      playing: game.playing ?? null,
+      name: place.name || null,
+      universeId: place.universeId || null,
+      playing: null,
     };
   } catch {
     return null;
@@ -78,7 +94,6 @@ async function getGameIcon(universeId) {
     url.searchParams.set("isCircular", "false");
 
     const res = await fetch(url.toString());
-
     if (!res.ok) return null;
 
     const data = await res.json();
@@ -162,7 +177,6 @@ module.exports = (client) => {
 
           if (newPlaceId) {
             const gameInfo = await getGameInfo(newPlaceId);
-
             gameName = gameInfo?.name || player.lastGameName || "Carregando jogo...";
             universeId = gameInfo?.universeId || player.lastUniverseId || null;
             playingCount = gameInfo?.playing ?? null;
@@ -177,7 +191,6 @@ module.exports = (client) => {
           const previousStartedPlayingAt = player.startedPlayingAt;
           const oldGameName = player.lastGameName || "Jogo anterior desconhecido";
 
-          // anti-spam simples
           if (player.lastNotificationAt && now - player.lastNotificationAt < 60000) {
             player.lastPresenceType = newPresenceType;
             player.lastPlaceId = newPlaceId;
@@ -341,5 +354,5 @@ module.exports = (client) => {
       console.error("Erro no monitorTask:");
       console.error(error);
     }
-  }, 2 * 60 * 1000);
+  },30 * 1000);
 };
