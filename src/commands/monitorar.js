@@ -30,60 +30,30 @@ async function getGameInfo(placeId) {
   if (!placeId) return null;
 
   try {
-    // 1) placeId -> universeId
     const universeRes = await fetch(
       `https://apis.roblox.com/universes/v1/places/${placeId}/universe`
     );
 
-    if (universeRes.ok) {
-      const universeData = await universeRes.json();
-      const universeId = universeData?.universeId;
+    if (!universeRes.ok) return null;
 
-      if (universeId) {
-        // 2) universeId -> game info
-        const gameRes = await fetch(
-          `https://games.roblox.com/v1/games?universeIds=${universeId}`
-        );
+    const universeData = await universeRes.json();
+    const universeId = universeData?.universeId;
 
-        if (gameRes.ok) {
-          const gameData = await gameRes.json();
-          const game = gameData?.data?.[0];
+    if (!universeId) return null;
 
-          if (game) {
-            return {
-              name: game.name || null,
-              universeId,
-              playing: game.playing ?? null,
-            };
-          }
-        }
+    const gameRes = await fetch(
+      `https://games.roblox.com/v1/games?universeIds=${universeId}`
+    );
 
-        return {
-          name: null,
-          universeId,
-          playing: null,
-        };
-      }
-    }
-  } catch {}
+    if (!gameRes.ok) return null;
 
-  // 3) fallback: place details
-  try {
-    const url = new URL("https://games.roblox.com/v1/games/multiget-place-details");
-    url.searchParams.set("placeIds", String(placeId));
-
-    const res = await fetch(url.toString());
-    if (!res.ok) return null;
-
-    const data = await res.json();
-    const place = Array.isArray(data) ? data[0] : null;
-
-    if (!place) return null;
+    const gameData = await gameRes.json();
+    const game = gameData?.data?.[0];
 
     return {
-      name: place.name || null,
-      universeId: place.universeId || null,
-      playing: null,
+      name: game?.name || null,
+      universeId,
+      playing: game?.playing ?? null,
     };
   } catch {
     return null;
@@ -102,6 +72,7 @@ async function getGameIcon(universeId) {
     url.searchParams.set("isCircular", "false");
 
     const res = await fetch(url.toString());
+
     if (!res.ok) return null;
 
     const data = await res.json();
