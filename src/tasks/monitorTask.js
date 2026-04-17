@@ -7,7 +7,20 @@ async function fetchPresence(userIds) {
     body: JSON.stringify({ userIds }),
   });
 
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Erro ${res.status} ao buscar presence\n${text}`);
+  }
+
   return res.json();
+}
+
+function getStatusText(type) {
+  if (type === 0) return "offline ⚫";
+  if (type === 1) return "online 🟢";
+  if (type === 2) return "entrou em um jogo 🎮";
+  if (type === 3) return "abriu o Studio 🛠️";
+  return "mudou de status";
 }
 
 module.exports = (client) => {
@@ -21,7 +34,7 @@ module.exports = (client) => {
 
       for (const discordUserId in data) {
         const players = data[discordUserId];
-        const ids = players.map((p) => Number(p.robloxUserId));
+        const ids = players.map((p) => Number(p.robloxUserId)).filter(Boolean);
 
         if (!ids.length) continue;
 
@@ -36,28 +49,32 @@ module.exports = (client) => {
 
           const changed =
             player.lastPresenceType !== presence.userPresenceType ||
-            player.lastPlaceId !== presence.placeId;
+            player.lastPlaceId !== (presence.placeId ?? null);
 
           if (changed) {
-            const user = await client.users.fetch(discordUserId);
+            const user = await client.users.fetch(discordUserId).catch(() => null);
 
-            let msg = `🔔 ${player.username} `;
+            if (user) {
+              const placeId = presence?.placeId;
+              const gameLink = placeId
+                ? `https://www.roblox.com/games/${placeId}`
+                : null;
 
-            if (presence.userPresenceType === 2) {
-              msg += "entrou em um jogo 🎮";
-            } else if (presence.userPresenceType === 1) {
-              msg += "ficou online 🟢";
-            } else if (presence.userPresenceType === 3) {
-              msg += "entrou no Studio 🛠️";
-            } else {
-              msg += "ficou offline ⚫";
+              const lines = [
+                `🔔 **${player.username}** ${getStatusText(presence.userPresenceType)}`,
+              ];
+
+              if (gameLink) {
+                lines.push(`🔗 ${gameLink}`);
+              }
+
+              await user.send(lines.join("\n")).catch(() => {});
             }
-
-            await user.send(msg).catch(() => {});
           }
 
-          player.lastPresenceType = presence.userPresenceType;
+          player.lastPresenceType = presence.userPresenceType ?? null;
           player.lastPlaceId = presence.placeId ?? null;
+          player.lastOnline = presence.lastOnline ?? null;
         }
       }
 
@@ -66,5 +83,5 @@ module.exports = (client) => {
       console.error("Erro no monitorTask:");
       console.error(error);
     }
-  }, 10 * 30 * 1000);
+  }, 30 * 1000);
 };
