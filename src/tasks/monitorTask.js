@@ -200,5 +200,5 @@ module.exports = (client) => {
       console.error("Erro no monitorTask:");
       console.error(error);
     }
-  }, 2 * 60 * 1000);
+  }, 30 * 1000);
 };
