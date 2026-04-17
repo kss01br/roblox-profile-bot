@@ -26,22 +26,35 @@ async function fetchPresence(userIds) {
   return res.json();
 }
 
-async function getPlaceDetails(placeId) {
+async function getGameInfo(placeId) {
   if (!placeId) return null;
 
   try {
-    const url = new URL("https://games.roblox.com/v1/games/multiget-place-details");
-    url.searchParams.set("placeIds", String(placeId));
+    const universeRes = await fetch(
+      `https://apis.roblox.com/universes/v1/places/${placeId}/universe`
+    );
 
-    const res = await fetch(url.toString());
+    if (!universeRes.ok) return null;
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`Erro ${res.status} ao buscar detalhes do place\n${text}`);
-    }
+    const universeData = await universeRes.json();
+    const universeId = universeData?.universeId;
 
-    const data = await res.json();
-    return Array.isArray(data) ? data[0] : null;
+    if (!universeId) return null;
+
+    const gameRes = await fetch(
+      `https://games.roblox.com/v1/games?universeIds=${universeId}`
+    );
+
+    if (!gameRes.ok) return null;
+
+    const gameData = await gameRes.json();
+    const game = gameData?.data?.[0];
+
+    return {
+      name: game?.name || null,
+      universeId,
+      playing: game?.playing ?? null,
+    };
   } catch {
     return null;
   }
@@ -132,11 +145,13 @@ module.exports = {
       let gameName = null;
       let universeId = null;
       let thumbnailUrl = null;
+      let playingCount = null;
 
       if (presence?.placeId) {
-        const placeDetails = await getPlaceDetails(presence.placeId);
-        gameName = placeDetails?.name || null;
-        universeId = placeDetails?.universeId || null;
+        const gameInfo = await getGameInfo(presence.placeId);
+        gameName = gameInfo?.name || "Carregando jogo...";
+        universeId = gameInfo?.universeId || null;
+        playingCount = gameInfo?.playing ?? null;
         thumbnailUrl = await getGameIcon(universeId);
       }
 
@@ -189,6 +204,14 @@ module.exports = {
           text: "Limite: 2 jogadores. Se adicionar outro, o mais antigo sai.",
         })
         .setTimestamp();
+
+      if (playingCount !== null) {
+        embed.addFields({
+          name: "👥 Jogando agora",
+          value: String(playingCount),
+          inline: true,
+        });
+      }
 
       if (thumbnailUrl) {
         embed.setThumbnail(thumbnailUrl);

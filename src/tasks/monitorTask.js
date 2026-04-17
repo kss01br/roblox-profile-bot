@@ -21,19 +21,46 @@ async function fetchPresence(userIds) {
   return res.json();
 }
 
-async function getPlaceDetails(placeId) {
+// NOVO: forma mais confiável de pegar nome do jogo
+async function getGameInfo(placeId) {
   if (!placeId) return null;
 
   try {
-    const url = new URL("https://games.roblox.com/v1/games/multiget-place-details");
-    url.searchParams.set("placeIds", String(placeId));
+    // 1) placeId -> universeId
+    const universeRes = await fetch(
+      `https://apis.roblox.com/universes/v1/places/${placeId}/universe`
+    );
 
-    const res = await fetch(url.toString());
+    if (!universeRes.ok) return null;
 
-    if (!res.ok) return null;
+    const universeData = await universeRes.json();
+    const universeId = universeData?.universeId;
 
-    const data = await res.json();
-    return Array.isArray(data) ? data[0] : null;
+    if (!universeId) return null;
+
+    // 2) universeId -> dados do jogo
+    const gameRes = await fetch(
+      `https://games.roblox.com/v1/games?universeIds=${universeId}`
+    );
+
+    if (!gameRes.ok) return null;
+
+    const gameData = await gameRes.json();
+    const game = gameData?.data?.[0];
+
+    if (!game) {
+      return {
+        name: null,
+        universeId,
+        playing: null,
+      };
+    }
+
+    return {
+      name: game.name || null,
+      universeId,
+      playing: game.playing ?? null,
+    };
   } catch {
     return null;
   }
@@ -131,16 +158,18 @@ module.exports = (client) => {
           let universeId = null;
           let thumbnailUrl = null;
           let gameLink = null;
+          let playingCount = null;
 
           if (newPlaceId) {
-            const placeDetails = await getPlaceDetails(newPlaceId);
-            gameName = placeDetails?.name || player.lastGameName || "Jogo desconhecido";
-            universeId = placeDetails?.universeId || null;
+            const gameInfo = await getGameInfo(newPlaceId);
+
+            gameName = gameInfo?.name || player.lastGameName || "Carregando jogo...";
+            universeId = gameInfo?.universeId || player.lastUniverseId || null;
+            playingCount = gameInfo?.playing ?? null;
             thumbnailUrl = await getGameIcon(universeId);
             gameLink = `https://www.roblox.com/games/${newPlaceId}`;
           }
 
-          // quando entra em jogo vindo de outro estado
           if (newPresenceType === 2 && player.lastPresenceType !== 2) {
             player.startedPlayingAt = now;
           }
@@ -148,7 +177,7 @@ module.exports = (client) => {
           const previousStartedPlayingAt = player.startedPlayingAt;
           const oldGameName = player.lastGameName || "Jogo anterior desconhecido";
 
-          // anti-spam simples: ignora notificação se acabou de mandar uma há menos de 60s
+          // anti-spam simples
           if (player.lastNotificationAt && now - player.lastNotificationAt < 60000) {
             player.lastPresenceType = newPresenceType;
             player.lastPlaceId = newPlaceId;
@@ -168,7 +197,6 @@ module.exports = (client) => {
 
           let components = [];
 
-          // mudou de jogo
           if (
             player.lastPresenceType === 2 &&
             newPresenceType === 2 &&
@@ -190,7 +218,7 @@ module.exports = (client) => {
                 },
                 {
                   name: "Entrou em",
-                  value: gameName || "Jogo desconhecido",
+                  value: gameName || "Carregando jogo...",
                   inline: false,
                 },
                 {
@@ -199,6 +227,14 @@ module.exports = (client) => {
                   inline: true,
                 }
               );
+
+            if (playingCount !== null) {
+              embed.addFields({
+                name: "👥 Jogando agora",
+                value: String(playingCount),
+                inline: true,
+              });
+            }
 
             if (gameLink) {
               embed.addFields({
@@ -210,17 +246,14 @@ module.exports = (client) => {
 
             components = buildGameButton(newPlaceId);
             player.startedPlayingAt = now;
-          }
-
-          // entrou em jogo
-          else if (newPresenceType === 2) {
+          } else if (newPresenceType === 2) {
             embed
               .setColor(0x57f287)
               .setDescription(`🎮 **${player.username}** entrou em um jogo`)
               .addFields(
                 {
                   name: "🎮 Jogo",
-                  value: gameName || "Jogo desconhecido",
+                  value: gameName || "Carregando jogo...",
                   inline: false,
                 },
                 {
@@ -229,6 +262,14 @@ module.exports = (client) => {
                   inline: true,
                 }
               );
+
+            if (playingCount !== null) {
+              embed.addFields({
+                name: "👥 Jogando agora",
+                value: String(playingCount),
+                inline: true,
+              });
+            }
 
             if (gameLink) {
               embed.addFields({
@@ -239,17 +280,11 @@ module.exports = (client) => {
             }
 
             components = buildGameButton(newPlaceId);
-          }
-
-          // ficou online
-          else if (newPresenceType === 1) {
+          } else if (newPresenceType === 1) {
             embed
               .setColor(0x3498db)
               .setDescription(`🟢 **${player.username}** ficou online`);
-          }
-
-          // ficou offline
-          else if (newPresenceType === 0) {
+          } else if (newPresenceType === 0) {
             embed
               .setColor(0x95a5a6)
               .setDescription(`⚫ **${player.username}** ficou offline`);
@@ -270,10 +305,7 @@ module.exports = (client) => {
             }
 
             player.startedPlayingAt = null;
-          }
-
-          // Studio
-          else if (newPresenceType === 3) {
+          } else if (newPresenceType === 3) {
             embed
               .setColor(0x9b59b6)
               .setDescription(`🛠️ **${player.username}** abriu o Studio`);
@@ -309,5 +341,5 @@ module.exports = (client) => {
       console.error("Erro no monitorTask:");
       console.error(error);
     }
-  }, 40 * 1000);
+  }, 2 * 60 * 1000);
 };
