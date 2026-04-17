@@ -15,9 +15,26 @@ async function fetchPresence(userIds) {
   return res.json();
 }
 
+async function getPlaceDetails(placeId) {
+  if (!placeId) return null;
+
+  const url = new URL("https://games.roblox.com/v1/games/multiget-place-details");
+  url.searchParams.set("placeIds", String(placeId));
+
+  const res = await fetch(url.toString());
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Erro ${res.status} ao buscar detalhes do place\n${text}`);
+  }
+
+  const data = await res.json();
+  return Array.isArray(data) ? data[0] : null;
+}
+
 function getStatusText(type) {
-  if (type === 0) return "offline ⚫";
-  if (type === 1) return "online 🟢";
+  if (type === 0) return "ficou offline ⚫";
+  if (type === 1) return "ficou online 🟢";
   if (type === 2) return "entrou em um jogo 🎮";
   if (type === 3) return "abriu o Studio 🛠️";
   return "mudou de status";
@@ -48,28 +65,32 @@ module.exports = (client) => {
           if (!player) continue;
 
           const changed =
-            player.lastPresenceType !== presence.userPresenceType ||
+            player.lastPresenceType !== (presence.userPresenceType ?? null) ||
             player.lastPlaceId !== (presence.placeId ?? null);
 
           if (changed) {
             const user = await client.users.fetch(discordUserId).catch(() => null);
 
-            if (user) {
-              const placeId = presence?.placeId;
-              const gameLink = placeId
-                ? `https://www.roblox.com/games/${placeId}`
-                : null;
+            let gameName = null;
+            let gameLink = null;
 
+            if (presence?.placeId) {
+              const placeDetails = await getPlaceDetails(presence.placeId);
+              gameName = placeDetails?.name || null;
+              gameLink = `https://www.roblox.com/games/${presence.placeId}`;
+            }
+
+            if (user) {
               const lines = [
                 `🔔 **${player.username}** ${getStatusText(presence.userPresenceType)}`,
-              ];
-
-              if (gameLink) {
-                lines.push(`🔗 ${gameLink}`);
-              }
+                gameName ? `🎮 **Jogo:** ${gameName}` : null,
+                gameLink ? `🔗 ${gameLink}` : null,
+              ].filter(Boolean);
 
               await user.send(lines.join("\n")).catch(() => {});
             }
+
+            player.lastGameName = gameName;
           }
 
           player.lastPresenceType = presence.userPresenceType ?? null;

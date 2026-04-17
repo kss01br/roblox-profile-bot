@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require("discord.js");
 const { getUserByUsername } = require("../utils/robloxUser");
 const { addMonitor } = require("../utils/monitorStore");
 
@@ -17,6 +17,23 @@ async function fetchPresence(userIds) {
   }
 
   return res.json();
+}
+
+async function getPlaceDetails(placeId) {
+  if (!placeId) return null;
+
+  const url = new URL("https://games.roblox.com/v1/games/multiget-place-details");
+  url.searchParams.set("placeIds", String(placeId));
+
+  const res = await fetch(url.toString());
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Erro ${res.status} ao buscar detalhes do place\n${text}`);
+  }
+
+  const data = await res.json();
+  return Array.isArray(data) ? data[0] : null;
 }
 
 function getStatusText(type) {
@@ -57,7 +74,7 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    await interaction.deferReply({ flags: 64 });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
       const nick = interaction.options.getString("nick", true);
@@ -66,30 +83,37 @@ module.exports = {
       const presenceData = await fetchPresence([user.userId]);
       const presence = presenceData?.userPresences?.[0];
 
+      let gameName = null;
+      let gameLink = null;
+
+      if (presence?.placeId) {
+        const placeDetails = await getPlaceDetails(presence.placeId);
+        gameName = placeDetails?.name || null;
+        gameLink = `https://www.roblox.com/games/${presence.placeId}`;
+      }
+
       const list = addMonitor(interaction.user.id, {
         robloxUserId: String(user.userId),
         username: user.username,
         lastPresenceType: presence?.userPresenceType ?? null,
         lastPlaceId: presence?.placeId ?? null,
         lastOnline: presence?.lastOnline ?? null,
+        lastGameName: gameName,
       });
 
       const statusText = getStatusText(presence?.userPresenceType ?? -1);
-      const placeId = presence?.placeId;
-      const gameLink = placeId
-        ? `https://www.roblox.com/games/${placeId}`
-        : null;
-
       const monitored = list.map((p, i) => `${i + 1}. ${p.username}`).join("\n");
 
       const embed = new EmbedBuilder()
         .setTitle("👁️ Monitoramento iniciado")
+        .setColor(0x5865f2)
         .setDescription(
           [
             `**Jogador:** ${user.displayName || user.username} (@${user.username})`,
             `**Status atual:** ${statusText}`,
             `**Último online:** ${formatLastOnline(presence?.lastOnline)}`,
-            gameLink ? `**Jogo:** ${gameLink}` : null,
+            gameName ? `**Jogo atual:** ${gameName}` : null,
+            gameLink ? `**Link:** ${gameLink}` : null,
             "",
             `**Seus monitoramentos:**`,
             monitored,
@@ -99,7 +123,6 @@ module.exports = {
             .filter(Boolean)
             .join("\n")
         )
-        .setColor(0x5865f2)
         .setTimestamp();
 
       await interaction.editReply({ embeds: [embed] });
