@@ -41,7 +41,7 @@ function resetTurnTimer(game) {
 }
 
 async function resendPublicGameMessage(client, game) {
-  const channel = await client.channels.fetch(game.channelId);
+  const channel = await client.channels.fetch(game.channelId).catch(() => null);
   if (!channel) return;
 
   const oldMessageId = game.messageId;
@@ -128,6 +128,24 @@ function startTrucoMaintenance(client) {
   }, 15000);
 }
 
+async function safeErrorResponse(interaction, message) {
+  try {
+    if (interaction.replied || interaction.deferred) {
+      await interaction.followUp({
+        content: message,
+        flags: 64,
+      }).catch(() => {});
+    } else {
+      await interaction.reply({
+        content: message,
+        flags: 64,
+      }).catch(() => {});
+    }
+  } catch (error) {
+    console.error("Erro ao responder falha da interação:", error);
+  }
+}
+
 module.exports = async (interaction, client) => {
   startTrucoMaintenance(client);
 
@@ -143,21 +161,7 @@ module.exports = async (interaction, client) => {
       await command.execute(interaction, client);
     } catch (error) {
       console.error(`Erro ao executar o comando ${interaction.commandName}:`, error);
-
-      try {
-        if (interaction.deferred || interaction.replied) {
-          await interaction.editReply({
-            content: "❌ Deu erro ao executar o comando.",
-          });
-        } else {
-          await interaction.reply({
-            content: "❌ Deu erro ao executar o comando.",
-            flags: 64,
-          });
-        }
-      } catch (replyError) {
-        console.error("Erro ao responder a interação após falha:", replyError);
-      }
+      await safeErrorResponse(interaction, "❌ Deu erro ao executar o comando.");
     }
 
     return;
@@ -185,81 +189,69 @@ module.exports = async (interaction, client) => {
     const game = getGame(matchId);
 
     if (!game) {
-      return interaction.reply({
-        content: "❌ Essa partida não existe mais.",
-        flags: 64,
-      });
+      await safeErrorResponse(interaction, "❌ Essa partida não existe mais.");
+      return;
     }
 
     const playerKey = findPlayerKey(game, interaction.user.id);
 
     if (!playerKey) {
-      return interaction.reply({
-        content: "❌ Você não faz parte desta partida.",
-        flags: 64,
-      });
+      await safeErrorResponse(interaction, "❌ Você não faz parte desta partida.");
+      return;
     }
 
     if (action === "accept") {
       if (interaction.user.id !== game.opponentId) {
-        return interaction.reply({
-          content: "❌ Só o oponente pode aceitar esta partida.",
-          flags: 64,
-        });
+        await safeErrorResponse(interaction, "❌ Só o oponente pode aceitar esta partida.");
+        return;
       }
 
       if (game.status !== "waiting_accept") {
-        return interaction.reply({
-          content: "❌ Essa partida já foi aceita.",
-          flags: 64,
-        });
+        await safeErrorResponse(interaction, "❌ Essa partida já foi aceita.");
+        return;
       }
+
+      await interaction.deferUpdate();
 
       game.status = "playing";
       game.actionText = `${interaction.user.username} aceitou a partida. ${game.players[game.currentTurn].name} começa.`;
       touchGame(game);
       resetTurnTimer(game);
 
-      await interaction.deferUpdate();
       await resendPublicGameMessage(client, game);
       return;
     }
 
     if (action === "openhand") {
       if (game.status !== "playing") {
-        return interaction.reply({
-          content: "❌ Você só pode jogar depois que a partida for aceita.",
-          flags: 64,
-        });
+        await safeErrorResponse(interaction, "❌ Você só pode jogar depois que a partida for aceita.");
+        return;
       }
 
-      return interaction.reply({
+      await interaction.reply({
         ...(await createPrivateHandPayload(game, playerKey)),
         flags: 64,
       });
+      return;
     }
 
     if (action === "truco") {
       if (game.status !== "playing") {
-        return interaction.reply({
-          content: "❌ A partida ainda não começou.",
-          flags: 64,
-        });
+        await safeErrorResponse(interaction, "❌ A partida ainda não começou.");
+        return;
       }
 
       if (game.pendingTruco) {
-        return interaction.reply({
-          content: "❌ Já existe um pedido de truco pendente.",
-          flags: 64,
-        });
+        await safeErrorResponse(interaction, "❌ Já existe um pedido de truco pendente.");
+        return;
       }
 
       if (game.roundValue >= 3) {
-        return interaction.reply({
-          content: "❌ Essa mão já está valendo 3 pontos.",
-          flags: 64,
-        });
+        await safeErrorResponse(interaction, "❌ Essa mão já está valendo 3 pontos.");
+        return;
       }
+
+      await interaction.deferUpdate();
 
       game.pendingTruco = {
         requestedBy: playerKey,
@@ -267,25 +259,22 @@ module.exports = async (interaction, client) => {
       game.actionText = makeTrucoText(interaction.user.username);
       touchGame(game);
 
-      await interaction.deferUpdate();
       await resendPublicGameMessage(client, game);
       return;
     }
 
     if (action === "accepttruco") {
       if (!game.pendingTruco) {
-        return interaction.reply({
-          content: "❌ Não existe truco pendente.",
-          flags: 64,
-        });
+        await safeErrorResponse(interaction, "❌ Não existe truco pendente.");
+        return;
       }
 
       if (game.pendingTruco.requestedBy === playerKey) {
-        return interaction.reply({
-          content: "❌ Você não pode aceitar o próprio truco.",
-          flags: 64,
-        });
+        await safeErrorResponse(interaction, "❌ Você não pode aceitar o próprio truco.");
+        return;
       }
+
+      await interaction.deferUpdate();
 
       game.roundValue = 3;
       game.pendingTruco = null;
@@ -293,18 +282,17 @@ module.exports = async (interaction, client) => {
       touchGame(game);
       resetTurnTimer(game);
 
-      await interaction.deferUpdate();
       await resendPublicGameMessage(client, game);
       return;
     }
 
     if (action === "run") {
       if (game.status !== "playing") {
-        return interaction.reply({
-          content: "❌ A partida ainda não começou.",
-          flags: 64,
-        });
+        await safeErrorResponse(interaction, "❌ A partida ainda não começou.");
+        return;
       }
+
+      await interaction.deferUpdate();
 
       const winnerKey = getOpponentKey(playerKey);
       const loserKey = playerKey;
@@ -330,7 +318,6 @@ module.exports = async (interaction, client) => {
         resetTurnTimer(game);
       }
 
-      await interaction.deferUpdate();
       await resendPublicGameMessage(client, game);
 
       if (game.status === "finished") {
@@ -341,38 +328,28 @@ module.exports = async (interaction, client) => {
 
     if (action === "play") {
       if (game.status !== "playing") {
-        return interaction.reply({
-          content: "❌ A partida ainda não começou.",
-          flags: 64,
-        });
+        await safeErrorResponse(interaction, "❌ A partida ainda não começou.");
+        return;
       }
 
       if (game.pendingTruco) {
-        return interaction.reply({
-          content: "❌ Resolva o pedido de truco antes de jogar.",
-          flags: 64,
-        });
+        await safeErrorResponse(interaction, "❌ Resolva o pedido de truco antes de jogar.");
+        return;
       }
 
       if (game.currentTurn !== playerKey) {
-        return interaction.reply({
-          content: "❌ Não é sua vez.",
-          flags: 64,
-        });
+        await safeErrorResponse(interaction, "❌ Não é sua vez.");
+        return;
       }
 
       if (game.playedCards[playerKey]) {
-        return interaction.reply({
-          content: "❌ Você já jogou uma carta nesta rodada.",
-          flags: 64,
-        });
+        await safeErrorResponse(interaction, "❌ Você já jogou uma carta nesta rodada.");
+        return;
       }
 
       if (!Number.isInteger(cardIndex) || cardIndex < 0 || cardIndex >= game.players[playerKey].hand.length) {
-        return interaction.reply({
-          content: "❌ Carta inválida.",
-          flags: 64,
-        });
+        await safeErrorResponse(interaction, "❌ Carta inválida.");
+        return;
       }
 
       if (!game.playedCards.p1 && !game.playedCards.p2) {
@@ -391,11 +368,9 @@ module.exports = async (interaction, client) => {
         game.actionText = `${interaction.user.username} jogou ${getCardDisplayName(playedCard)}.`;
         resetTurnTimer(game);
 
+        await interaction.update(createPostPlayEphemeralPayload(game, playerKey));
         await resendPublicGameMessage(client, game);
-
-        return interaction.update(
-          createPostPlayEphemeralPayload(game, playerKey)
-        );
+        return;
       }
 
       const { roundWinner, handWinner, cardP1, cardP2 } = resolveRound(game);
@@ -433,33 +408,16 @@ module.exports = async (interaction, client) => {
         resetTurnTimer(game);
       }
 
+      await interaction.update(createPostPlayEphemeralPayload(game, playerKey));
       await resendPublicGameMessage(client, game);
 
       if (game.status === "finished") {
         deleteGame(game.id);
       }
-
-      return interaction.update(
-        createPostPlayEphemeralPayload(game, playerKey)
-      );
+      return;
     }
   } catch (error) {
     console.error("Erro ao processar botão do truco:", error);
-
-    try {
-      if (interaction.deferred || interaction.replied) {
-        await interaction.followUp({
-          content: "❌ Deu erro ao processar essa ação.",
-          flags: 64,
-        });
-      } else {
-        await interaction.reply({
-          content: "❌ Deu erro ao processar essa ação.",
-          flags: 64,
-        });
-      }
-    } catch (replyError) {
-      console.error("Erro ao responder botão após falha:", replyError);
-    }
+    await safeErrorResponse(interaction, "❌ Deu erro ao processar essa ação.");
   }
 };

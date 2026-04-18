@@ -12,7 +12,9 @@ const client = new Client({
 client.commands = new Collection();
 
 const commandsPath = path.join(__dirname, "commands");
-const commandFiles = fs.readdirSync(commandsPath).filter((file) => file.endsWith(".js"));
+const commandFiles = fs
+  .readdirSync(commandsPath)
+  .filter((file) => file.endsWith(".js"));
 
 console.log("readyHandler:", readyHandler);
 console.log("interactionCreateHandler:", interactionCreateHandler);
@@ -51,17 +53,34 @@ client.on("interactionCreate", async (interaction) => {
     console.error("Erro no interactionCreateHandler:");
     console.error(error);
 
-    if (interaction.isRepliable()) {
-      if (interaction.deferred || interaction.replied) {
-        await interaction.editReply("❌ Ocorreu um erro ao processar este comando.");
+    try {
+      if (!interaction.isRepliable()) return;
+
+      if (interaction.replied || interaction.deferred) {
+        await interaction
+          .followUp({
+            content: "❌ Ocorreu um erro ao processar este comando.",
+            flags: 64,
+          })
+          .catch(() => {});
       } else {
-        await interaction.reply({
-          content: "❌ Ocorreu um erro ao processar este comando.",
-          ephemeral: true,
-        });
+        await interaction
+          .reply({
+            content: "❌ Ocorreu um erro ao processar este comando.",
+            flags: 64,
+          })
+          .catch(() => {});
       }
+    } catch (replyError) {
+      console.error("Falha ao responder erro global:");
+      console.error(replyError);
     }
   }
+});
+
+client.on("error", (error) => {
+  console.error("Erro no client do Discord:");
+  console.error(error);
 });
 
 if (!DISCORD_TOKEN) {
