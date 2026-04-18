@@ -192,7 +192,7 @@ function buildPendingTrucoRow(matchId) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`truco_openhand_${matchId}`)
-      .setLabel("Minha mão")
+      .setLabel("Jogar carta")
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId(`truco_accepttruco_${matchId}`)
@@ -209,7 +209,7 @@ function buildPublicControlsRow(matchId, disabled = false) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`truco_openhand_${matchId}`)
-      .setLabel("Minha mão")
+      .setLabel("Jogar carta")
       .setStyle(ButtonStyle.Primary)
       .setDisabled(disabled),
     new ButtonBuilder()
