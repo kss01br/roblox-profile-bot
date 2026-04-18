@@ -6,6 +6,7 @@ const {
   getOpponentKey,
   resolveRound,
   awardHandPoints,
+  getCardDisplayName,
   makeRoundText,
   makeDrawText,
   makeHandText,
@@ -16,17 +17,29 @@ const {
 const {
   createPublicMessagePayload,
   createPrivateHandPayload,
+  createPostPlayEphemeralPayload,
 } = require("../games/trucoViews");
 
-async function updatePublicGameMessage(client, game) {
+async function resendPublicGameMessage(client, game) {
   const channel = await client.channels.fetch(game.channelId);
   if (!channel) return;
 
-  const message = await channel.messages.fetch(game.messageId);
-  if (!message) return;
-
+  const oldMessageId = game.messageId;
   const payload = await createPublicMessagePayload(game);
-  await message.edit(payload);
+
+  const newMessage = await channel.send(payload);
+  game.messageId = newMessage.id;
+
+  if (oldMessageId) {
+    try {
+      const oldMessage = await channel.messages.fetch(oldMessageId);
+      if (oldMessage) {
+        await oldMessage.delete().catch(() => {});
+      }
+    } catch {
+      // ignora se não achar a antiga
+    }
+  }
 }
 
 module.exports = async (interaction, client) => {
@@ -117,7 +130,8 @@ module.exports = async (interaction, client) => {
       game.status = "playing";
       game.actionText = `${interaction.user.username} aceitou a partida. ${game.players[game.currentTurn].name} começa.`;
 
-      await interaction.update(await createPublicMessagePayload(game));
+      await interaction.deferUpdate();
+      await resendPublicGameMessage(client, game);
       return;
     }
 
@@ -162,7 +176,8 @@ module.exports = async (interaction, client) => {
       };
       game.actionText = makeTrucoText(interaction.user.username);
 
-      await interaction.update(await createPublicMessagePayload(game));
+      await interaction.deferUpdate();
+      await resendPublicGameMessage(client, game);
       return;
     }
 
@@ -185,7 +200,8 @@ module.exports = async (interaction, client) => {
       game.pendingTruco = null;
       game.actionText = `${interaction.user.username} aceitou o TRUCO. A mão agora vale 3 pontos.`;
 
-      await interaction.update(await createPublicMessagePayload(game));
+      await interaction.deferUpdate();
+      await resendPublicGameMessage(client, game);
       return;
     }
 
@@ -213,7 +229,8 @@ module.exports = async (interaction, client) => {
         );
       }
 
-      await interaction.update(await createPublicMessagePayload(game));
+      await interaction.deferUpdate();
+      await resendPublicGameMessage(client, game);
       return;
     }
 
@@ -265,20 +282,25 @@ module.exports = async (interaction, client) => {
 
       if (!game.playedCards[opponentKey]) {
         game.currentTurn = opponentKey;
-        game.actionText = `${interaction.user.username} jogou ${playedCard.label}.`;
+        game.actionText = `${interaction.user.username} jogou ${getCardDisplayName(playedCard)}.`;
 
-        await updatePublicGameMessage(client, game);
+        await resendPublicGameMessage(client, game);
 
-        return interaction.update(await createPrivateHandPayload(game, playerKey));
+        return interaction.update(
+          createPostPlayEphemeralPayload(game, playerKey)
+        );
       }
 
       const { roundWinner, handWinner, cardP1, cardP2 } = resolveRound(game);
 
+      const cardP1Name = getCardDisplayName(cardP1);
+      const cardP2Name = getCardDisplayName(cardP2);
+
       if (roundWinner === "draw") {
-        game.actionText = makeDrawText(cardP1.label, cardP2.label);
+        game.actionText = makeDrawText(cardP1Name, cardP2Name);
       } else {
-        const winnerCard = roundWinner === "p1" ? cardP1.label : cardP2.label;
-        const loserCard = roundWinner === "p1" ? cardP2.label : cardP1.label;
+        const winnerCard = roundWinner === "p1" ? cardP1Name : cardP2Name;
+        const loserCard = roundWinner === "p1" ? cardP2Name : cardP1Name;
         game.actionText = makeRoundText(game.players[roundWinner].name, winnerCard, loserCard);
       }
 
@@ -293,9 +315,11 @@ module.exports = async (interaction, client) => {
         }
       }
 
-      await updatePublicGameMessage(client, game);
+      await resendPublicGameMessage(client, game);
 
-      return interaction.update(await createPrivateHandPayload(game, playerKey));
+      return interaction.update(
+        createPostPlayEphemeralPayload(game, playerKey)
+      );
     }
   } catch (error) {
     console.error("Erro ao processar botão do truco:", error);

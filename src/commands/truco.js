@@ -121,11 +121,9 @@ module.exports = {
     setGame(game);
 
     const payload = await createPublicMessagePayload(game);
-    const reply = await interaction.reply({
-      ...payload,
-      fetchReply: true,
-    });
+    await interaction.reply(payload);
 
+    const reply = await interaction.fetchReply();
     game.messageId = reply.id;
   },
 };

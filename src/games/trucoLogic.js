@@ -133,12 +133,50 @@ function awardHandPoints(game, winnerKey, points) {
   };
 }
 
+function getCardDisplayName(card) {
+  if (!card) return "Carta desconhecida";
+
+  if (card.type === "manilha") {
+    const map = {
+      M1: "Manilha 1",
+      M2: "Manilha 2",
+      M3: "Manilha 3",
+      M4: "Manilha 4",
+    };
+    return map[card.rank] || card.rank;
+  }
+
+  const rankMap = {
+    A: "Ás",
+    K: "Rei",
+    Q: "Dama",
+    J: "Valete",
+    "2": "2",
+    "3": "3",
+  };
+
+  const suitMap = {
+    espada: "espada",
+    copas: "copas",
+    ouro: "ouro",
+    paus: "paus",
+  };
+
+  return `${rankMap[card.rank] || card.rank} de ${suitMap[card.suit] || card.suit}`;
+}
+
 function makeRoundText(winnerName, winnerCard, loserCard) {
   return pickRandom([
     `${winnerName} venceu a rodada com ${winnerCard} contra ${loserCard}.`,
     `A carta maior falou mais alto: ${winnerCard} de ${winnerName}.`,
     `${winnerName} levou a rodada com ${winnerCard}.`,
     `${winnerName} não deixou barato: ${winnerCard} venceu ${loserCard}.`,
+    `${winnerName} mostrou força com ${winnerCard}.`,
+    `${winnerName} passou por cima com ${winnerCard}.`,
+    `${winnerName} encaixou ${winnerCard} e levou a rodada.`,
+    `${winnerName} dominou a rodada com ${winnerCard}.`,
+    `${winnerName} respondeu melhor e venceu com ${winnerCard}.`,
+    `${winnerName} encaixou a carta maior: ${winnerCard}.`,
   ]);
 }
 
@@ -147,6 +185,13 @@ function makeDrawText(cardA, cardB) {
     `Rodada empatada: ${cardA} contra ${cardB}.`,
     `Ninguém levou essa. ${cardA} e ${cardB} ficaram iguais.`,
     `Empate na rodada entre ${cardA} e ${cardB}.`,
+    `${cardA} e ${cardB} bateram de frente.`,
+    `Tudo igual na mesa: ${cardA} contra ${cardB}.`,
+    `A rodada travou: ${cardA} e ${cardB}.`,
+    `Nenhum dos dois levou. ${cardA} igualou ${cardB}.`,
+    `Empate seco entre ${cardA} e ${cardB}.`,
+    `A mesa ficou neutra: ${cardA} e ${cardB}.`,
+    `Rodada sem vencedor: ${cardA} bateu em ${cardB}.`,
   ]);
 }
 
@@ -155,6 +200,13 @@ function makeHandText(winnerName, points) {
     `${winnerName} venceu a mão e ganhou ${points} ponto(s).`,
     `${winnerName} fechou a mão e somou ${points} ponto(s).`,
     `${winnerName} tomou a frente e levou ${points} ponto(s).`,
+    `${winnerName} garantiu a mão e marcou ${points} ponto(s).`,
+    `${winnerName} saiu melhor e faturou ${points} ponto(s).`,
+    `${winnerName} foi mais frio e levou ${points} ponto(s).`,
+    `${winnerName} encaixou a mão e somou ${points} ponto(s).`,
+    `${winnerName} controlou a mão e ganhou ${points} ponto(s).`,
+    `${winnerName} ficou com a mão e levou ${points} ponto(s).`,
+    `${winnerName} confirmou a vantagem e marcou ${points} ponto(s).`,
   ]);
 }
 
@@ -163,6 +215,13 @@ function makeTrucoText(playerName) {
     `${playerName} pediu TRUCO! Vai aceitar?`,
     `${playerName} gritou TRUCO! O clima esquentou.`,
     `${playerName} chamou no peito: TRUCO.`,
+    `${playerName} dobrou a pressão e pediu TRUCO.`,
+    `${playerName} subiu a aposta: TRUCO.`,
+    `${playerName} quis acelerar a mão com um TRUCO.`,
+    `${playerName} apertou o jogo: TRUCO.`,
+    `${playerName} trouxe fogo pra mesa: TRUCO.`,
+    `${playerName} chamou a responsa: TRUCO.`,
+    `${playerName} jogou pesado e pediu TRUCO.`,
   ]);
 }
 
@@ -171,6 +230,13 @@ function makeRunText(playerName, winnerName, points) {
     `${playerName} correu. ${winnerName} levou ${points} ponto(s).`,
     `${playerName} arregou na mão. ${winnerName} soma ${points} ponto(s).`,
     `${playerName} saiu da disputa. ${winnerName} ganha ${points} ponto(s).`,
+    `${playerName} preferiu não pagar pra ver. ${winnerName} marca ${points} ponto(s).`,
+    `${playerName} recuou. ${winnerName} ficou com ${points} ponto(s).`,
+    `${playerName} abandonou a mão. ${winnerName} leva ${points} ponto(s).`,
+    `${playerName} deixou passar. ${winnerName} pontua ${points}.`,
+    `${playerName} não quis seguir. ${winnerName} soma ${points}.`,
+    `${playerName} baixou a guarda. ${winnerName} ganha ${points}.`,
+    `${playerName} correu da pressão. ${winnerName} leva ${points}.`,
   ]);
 }
 
@@ -179,6 +245,13 @@ function makeMatchWinText(winnerName) {
     `${winnerName} venceu a partida!`,
     `${winnerName} fechou o jogo e saiu com a vitória!`,
     `${winnerName} dominou a mesa e ganhou a partida!`,
+    `${winnerName} foi mais frio e levou essa!`,
+    `${winnerName} confirmou o favoritismo e venceu!`,
+    `${winnerName} saiu por cima no fim do duelo!`,
+    `${winnerName} encaixou o jogo e venceu a partida!`,
+    `${winnerName} levou a melhor e fechou o placar!`,
+    `${winnerName} segurou a pressão e ganhou!`,
+    `${winnerName} foi o dono da mesa no final!`,
   ]);
 }
 
@@ -188,6 +261,7 @@ module.exports = {
   resolveRound,
   startNewHand,
   awardHandPoints,
+  getCardDisplayName,
   makeRoundText,
   makeDrawText,
   makeHandText,
