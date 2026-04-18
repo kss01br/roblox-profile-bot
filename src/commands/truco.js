@@ -1,19 +1,51 @@
-const { SlashCommandBuilder } = require("discord.js");
+const {
+  SlashCommandBuilder,
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+} = require("discord.js");
 const {
   createDeck,
   shuffleDeck,
   dealHands,
 } = require("../games/trucoDeck");
+const {
+  createMatchId,
+  setGame,
+  getGame,
+  findPlayerKey,
+  formatHand,
+} = require("../games/trucoManager");
 
-// memória simples
-const activeGames = new Map();
-
-function createMatchId() {
-  return `truco_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+function buildPublicGameEmbed(game, creatorId, opponentId) {
+  return new EmbedBuilder()
+    .setTitle("🃏 Truco Lunar")
+    .setDescription(
+      `**Partida criada**\n\n` +
+        `<@${creatorId}> vs <@${opponentId}>\n` +
+        `ID: \`${game.id}\`\n\n` +
+        `**Status:** ${game.status === "waiting_accept" ? "Aguardando aceite" : "Em andamento"}\n` +
+        `**Placar:** ${game.players.p1.name} 0 x 0 ${game.players.p2.name}\n` +
+        `**Valor da mão:** ${game.roundValue}\n` +
+        `**Vez:** ${game.players[game.currentTurn].name}`
+    )
+    .setColor(0x5865f2)
+    .setFooter({ text: "Cada jogador vê a própria mão no privado." })
+    .setTimestamp();
 }
 
-function formatHand(hand) {
-  return hand.map((card, index) => `${index + 1}. ${card.label}`).join("\n");
+function buildAcceptRow(matchId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`truco_accept_${matchId}`)
+      .setLabel("Aceitar partida")
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`truco_viewhand_${matchId}`)
+      .setLabel("Ver minha mão")
+      .setStyle(ButtonStyle.Primary)
+  );
 }
 
 module.exports = {
@@ -36,87 +68,109 @@ module.exports = {
     const subcommand = interaction.options.getSubcommand();
 
     const allowedRoleId = process.env.TRUCO_ALLOWED_ROLE_ID;
-    const memberRoles = interaction.member.roles.cache;
+    const memberRoles = interaction.member?.roles?.cache;
 
     if (!allowedRoleId) {
       return interaction.reply({
         content: "❌ TRUCO_ALLOWED_ROLE_ID não configurado no .env.",
-        ephemeral: true,
+        flags: 64,
       });
     }
 
-    if (!memberRoles.has(allowedRoleId)) {
+    if (!memberRoles || !memberRoles.has(allowedRoleId)) {
       return interaction.reply({
         content: "❌ Você não tem permissão para usar o truco.",
-        ephemeral: true,
+        flags: 64,
       });
     }
 
-    if (subcommand === "criar") {
-      const opponent = interaction.options.getUser("oponente");
+    if (subcommand !== "criar") return;
 
-      if (opponent.id === interaction.user.id) {
-        return interaction.reply({
-          content: "❌ Você não pode jogar contra você mesmo.",
-          ephemeral: true,
-        });
-      }
+    const opponent = interaction.options.getUser("oponente");
 
-      if (opponent.bot) {
-        return interaction.reply({
-          content: "❌ Você não pode jogar contra um bot.",
-          ephemeral: true,
-        });
-      }
-
-      const matchId = createMatchId();
-
-      const deck = createDeck();
-      const shuffledDeck = shuffleDeck(deck);
-      const { p1Hand, p2Hand, remainingDeck } = dealHands(shuffledDeck);
-
-      const game = {
-        id: matchId,
-        players: {
-          p1: {
-            id: interaction.user.id,
-            name: interaction.user.username,
-            hand: p1Hand,
-          },
-          p2: {
-            id: opponent.id,
-            name: opponent.username,
-            hand: p2Hand,
-          },
-        },
-        score: {
-          p1: 0,
-          p2: 0,
-        },
-        roundValue: 1,
-        roundStarter: "p1",
-        currentTurn: "p1",
-        roundResults: [],
-        playedCards: {
-          p1: null,
-          p2: null,
-        },
-        deck: remainingDeck,
-        status: "playing",
-      };
-
-      activeGames.set(matchId, game);
-
-      await interaction.reply({
-        content:
-          `🃏 Partida criada!\n\n` +
-          `${interaction.user} vs ${opponent}\n` +
-          `ID: \`${matchId}\`\n\n` +
-          `**Mão de ${interaction.user.username}:**\n${formatHand(p1Hand)}\n\n` +
-          `**Mão de ${opponent.username}:**\n${formatHand(p2Hand)}`,
+    if (!opponent) {
+      return interaction.reply({
+        content: "❌ Oponente inválido.",
+        flags: 64,
       });
-
-      console.log("Nova partida criada:", game);
     }
+
+    if (opponent.id === interaction.user.id) {
+      return interaction.reply({
+        content: "❌ Você não pode jogar contra você mesmo.",
+        flags: 64,
+      });
+    }
+
+    if (opponent.bot) {
+      return interaction.reply({
+        content: "❌ Você não pode jogar contra um bot.",
+        flags: 64,
+      });
+    }
+
+    const deck = shuffleDeck(createDeck());
+    const { p1Hand, p2Hand, remainingDeck } = dealHands(deck);
+    const matchId = createMatchId();
+
+    const game = {
+      id: matchId,
+      channelId: interaction.channelId,
+      guildId: interaction.guildId,
+      creatorId: interaction.user.id,
+      opponentId: opponent.id,
+      messageId: null,
+      status: "waiting_accept",
+      players: {
+        p1: {
+          id: interaction.user.id,
+          name: interaction.user.username,
+          hand: p1Hand,
+        },
+        p2: {
+          id: opponent.id,
+          name: opponent.username,
+          hand: p2Hand,
+        },
+      },
+      score: {
+        p1: 0,
+        p2: 0,
+      },
+      roundValue: 1,
+      handStarter: "p1",
+      roundStarter: "p1",
+      currentTurn: "p1",
+      roundResults: [],
+      playedCards: {
+        p1: null,
+        p2: null,
+      },
+      deck: remainingDeck,
+      createdAt: Date.now(),
+    };
+
+    setGame(game);
+
+    const embed = buildPublicGameEmbed(game, interaction.user.id, opponent.id);
+    const row = buildAcceptRow(matchId);
+
+    const reply = await interaction.reply({
+      content: `🎮 <@${opponent.id}>, você foi desafiado para uma partida de truco.`,
+      embeds: [embed],
+      components: [row],
+      fetchReply: true,
+    });
+
+    game.messageId = reply.id;
+
+    await interaction.followUp({
+      content:
+        `🃏 **Sua mão**\n\n` +
+        `Partida: \`${matchId}\`\n` +
+        `Oponente: **${opponent.username}**\n\n` +
+        `${formatHand(p1Hand)}`,
+      flags: 64,
+    });
   },
 };
