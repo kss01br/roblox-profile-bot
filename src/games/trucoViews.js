@@ -191,6 +191,10 @@ function buildAcceptRow(matchId) {
 function buildPendingTrucoRow(matchId) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
+      .setCustomId(`truco_openhand_${matchId}`)
+      .setLabel("Abrir minha mão")
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
       .setCustomId(`truco_accepttruco_${matchId}`)
       .setLabel("Aceitar Truco")
       .setStyle(ButtonStyle.Success),
@@ -203,6 +207,11 @@ function buildPendingTrucoRow(matchId) {
 
 function buildPublicControlsRow(matchId, disabled = false) {
   return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`truco_openhand_${matchId}`)
+      .setLabel("Abrir minha mão")
+      .setStyle(ButtonStyle.Primary)
+      .setDisabled(disabled),
     new ButtonBuilder()
       .setCustomId(`truco_truco_${matchId}`)
       .setLabel("Truco")
@@ -243,7 +252,7 @@ function buildPublicGameEmbed(game) {
     )
     .setColor(game.status === "finished" ? 0x22c55e : 0x5865f2)
     .setImage("attachment://truco-board.png")
-    .setFooter({ text: "Mesa pública. Mãos em canais privados da partida." })
+    .setFooter({ text: "Mão privada em ephemeral. Mesa pública." })
     .setTimestamp();
 }
 
@@ -256,7 +265,7 @@ function buildPrivateHandEmbed(game, playerKey) {
   if (game.status !== "playing") {
     statusText = "A partida ainda não está em andamento.";
   } else if (game.pendingTruco) {
-    statusText = "Aguardando resposta do truco.";
+    statusText = "Resolva o truco antes de jogar.";
   } else if (alreadyPlayed) {
     statusText = "Você já jogou nesta rodada.";
   } else if (isTurn) {

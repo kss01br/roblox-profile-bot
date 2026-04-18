@@ -1,8 +1,4 @@
 const {
-  ChannelType,
-  PermissionsBitField,
-} = require("discord.js");
-const {
   getGame,
   findPlayerKey,
 } = require("../games/trucoManager");
@@ -33,58 +29,6 @@ async function updatePublicGameMessage(client, game) {
   await message.edit(payload);
 }
 
-async function updatePlayerHandMessage(client, game, playerKey) {
-  const channelId = game.privateChannels?.[playerKey]?.channelId;
-  const messageId = game.privateChannels?.[playerKey]?.messageId;
-
-  if (!channelId || !messageId) return;
-
-  const channel = await client.channels.fetch(channelId);
-  if (!channel) return;
-
-  const message = await channel.messages.fetch(messageId);
-  if (!message) return;
-
-  const payload = await createPrivateHandPayload(game, playerKey);
-  await message.edit(payload);
-}
-
-async function updateBothHandMessages(client, game) {
-  await updatePlayerHandMessage(client, game, "p1");
-  await updatePlayerHandMessage(client, game, "p2");
-}
-
-async function createPrivateHandChannel(guild, parentId, name, userId, botUserId) {
-  return guild.channels.create({
-    name,
-    type: ChannelType.GuildText,
-    parent: parentId || null,
-    permissionOverwrites: [
-      {
-        id: guild.roles.everyone.id,
-        deny: [PermissionsBitField.Flags.ViewChannel],
-      },
-      {
-        id: userId,
-        allow: [
-          PermissionsBitField.Flags.ViewChannel,
-          PermissionsBitField.Flags.SendMessages,
-          PermissionsBitField.Flags.ReadMessageHistory,
-        ],
-      },
-      {
-        id: botUserId,
-        allow: [
-          PermissionsBitField.Flags.ViewChannel,
-          PermissionsBitField.Flags.SendMessages,
-          PermissionsBitField.Flags.ReadMessageHistory,
-          PermissionsBitField.Flags.ManageMessages,
-        ],
-      },
-    ],
-  });
-}
-
 module.exports = async (interaction, client) => {
   if (interaction.isChatInputCommand()) {
     const command = client.commands.get(interaction.commandName);
@@ -96,14 +40,6 @@ module.exports = async (interaction, client) => {
 
     try {
       await command.execute(interaction, client);
-
-      if (interaction.commandName === "truco" && interaction.options.getSubcommand() === "criar") {
-        const lastReply = await interaction.fetchReply().catch(() => null);
-        if (!lastReply) return;
-
-        const matchIdMatch = lastReply.embeds?.[0]?.data?.description?.match(/truco_\d+_\d+/);
-        if (!matchIdMatch) return;
-      }
     } catch (error) {
       console.error(`Erro ao executar o comando ${interaction.commandName}:`, error);
 
@@ -178,76 +114,25 @@ module.exports = async (interaction, client) => {
         });
       }
 
-      const guild = interaction.guild;
-      const parentId = process.env.TRUCO_HANDS_CATEGORY_ID || interaction.channel.parentId || null;
-
-      const p1Channel = await createPrivateHandChannel(
-        guild,
-        parentId,
-        `mao-${game.id}-p1`,
-        game.players.p1.id,
-        client.user.id
-      );
-
-      const p2Channel = await createPrivateHandChannel(
-        guild,
-        parentId,
-        `mao-${game.id}-p2`,
-        game.players.p2.id,
-        client.user.id
-      );
-
-      game.privateChannels = {
-        p1: {
-          channelId: p1Channel.id,
-          messageId: null,
-        },
-        p2: {
-          channelId: p2Channel.id,
-          messageId: null,
-        },
-      };
-
       game.status = "playing";
       game.actionText = `${interaction.user.username} aceitou a partida. ${game.players[game.currentTurn].name} começa.`;
 
       await interaction.update(await createPublicMessagePayload(game));
-
-      const p1Message = await p1Channel.send(await createPrivateHandPayload(game, "p1"));
-      const p2Message = await p2Channel.send(await createPrivateHandPayload(game, "p2"));
-
-      game.privateChannels.p1.messageId = p1Message.id;
-      game.privateChannels.p2.messageId = p2Message.id;
-
-      await p1Channel.send(`🃏 Sua mão está aqui, <@${game.players.p1.id}>.`);
-      await p2Channel.send(`🃏 Sua mão está aqui, <@${game.players.p2.id}>.`);
-
       return;
     }
 
-    if (action === "accepttruco") {
-      if (!game.pendingTruco) {
+    if (action === "openhand") {
+      if (game.status !== "playing") {
         return interaction.reply({
-          content: "❌ Não existe truco pendente.",
+          content: "❌ Você só pode abrir sua mão depois que a partida for aceita.",
           flags: 64,
         });
       }
 
-      if (game.pendingTruco.requestedBy === playerKey) {
-        return interaction.reply({
-          content: "❌ Você não pode aceitar o próprio truco.",
-          flags: 64,
-        });
-      }
-
-      game.roundValue = 3;
-      game.pendingTruco = null;
-      game.actionText = `${interaction.user.username} aceitou o TRUCO. A mão agora vale 3 pontos.`;
-
-      await updatePublicGameMessage(client, game);
-      await updateBothHandMessages(client, game);
-
-      return interaction.deferUpdate();
+      return interaction.reply({
+        ...(await createPrivateHandPayload(game, playerKey)),
+        flags: 64,
+      });
     }
 
     if (action === "truco") {
@@ -277,10 +162,31 @@ module.exports = async (interaction, client) => {
       };
       game.actionText = makeTrucoText(interaction.user.username);
 
-      await updatePublicGameMessage(client, game);
-      await updateBothHandMessages(client, game);
+      await interaction.update(await createPublicMessagePayload(game));
+      return;
+    }
 
-      return interaction.deferUpdate();
+    if (action === "accepttruco") {
+      if (!game.pendingTruco) {
+        return interaction.reply({
+          content: "❌ Não existe truco pendente.",
+          flags: 64,
+        });
+      }
+
+      if (game.pendingTruco.requestedBy === playerKey) {
+        return interaction.reply({
+          content: "❌ Você não pode aceitar o próprio truco.",
+          flags: 64,
+        });
+      }
+
+      game.roundValue = 3;
+      game.pendingTruco = null;
+      game.actionText = `${interaction.user.username} aceitou o TRUCO. A mão agora vale 3 pontos.`;
+
+      await interaction.update(await createPublicMessagePayload(game));
+      return;
     }
 
     if (action === "run") {
@@ -307,10 +213,8 @@ module.exports = async (interaction, client) => {
         );
       }
 
-      await updatePublicGameMessage(client, game);
-      await updateBothHandMessages(client, game);
-
-      return interaction.deferUpdate();
+      await interaction.update(await createPublicMessagePayload(game));
+      return;
     }
 
     if (action === "play") {
@@ -364,9 +268,8 @@ module.exports = async (interaction, client) => {
         game.actionText = `${interaction.user.username} jogou ${playedCard.label}.`;
 
         await updatePublicGameMessage(client, game);
-        await updateBothHandMessages(client, game);
 
-        return interaction.deferUpdate();
+        return interaction.update(await createPrivateHandPayload(game, playerKey));
       }
 
       const { roundWinner, handWinner, cardP1, cardP2 } = resolveRound(game);
@@ -391,9 +294,8 @@ module.exports = async (interaction, client) => {
       }
 
       await updatePublicGameMessage(client, game);
-      await updateBothHandMessages(client, game);
 
-      return interaction.deferUpdate();
+      return interaction.update(await createPrivateHandPayload(game, playerKey));
     }
   } catch (error) {
     console.error("Erro ao processar botão do truco:", error);
