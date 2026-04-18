@@ -62,41 +62,73 @@ module.exports = {
     await interaction.deferReply();
 
     try {
-      const allowedRoleId = process.env.AVATAR_ALLOWED_ROLE_ID;
-      const memberRoles = interaction.member?.roles?.cache;
-
-      if (!allowedRoleId) {
-        return interaction.editReply("❌ AVATAR_ALLOWED_ROLE_ID não configurado.");
-      }
-
-      if (!memberRoles || !memberRoles.has(allowedRoleId)) {
-        return interaction.editReply("❌ Você não tem o cargo permitido para usar este comando.");
-      }
-
-      const usedToday = getUserUsageToday(interaction.user.id);
-
-      if (usedToday >= 2) {
-        return interaction.editReply("❌ Você já usou suas 2 avaliações de hoje.");
-      }
+      console.log("=== /avaliaravatar iniciado ===");
+      console.log("Usuário Discord:", interaction.user.username, interaction.user.id);
 
       const nick = interaction.options.getString("nick");
       const id = interaction.options.getInteger("id");
       const modo = interaction.options.getString("modo") || "padrao";
 
+      console.log("Nick recebido:", nick);
+      console.log("ID recebido:", id);
+      console.log("Modo recebido:", modo);
+
       if (!nick && !id) {
-        return interaction.editReply("❌ Envie pelo menos um `nick` ou um `id`.");
+        return await interaction.editReply("❌ Envie pelo menos um `nick` ou um `id`.");
       }
+
+      // TESTE TEMPORÁRIO:
+      // cargo desativado pra descobrir o erro principal
+      // Quando tudo estiver funcionando, a gente liga isso de novo.
+
+      /*
+      const allowedRoleId = process.env.AVATAR_ALLOWED_ROLE_ID;
+      const memberRoles = interaction.member?.roles?.cache;
+
+      if (!allowedRoleId) {
+        return await interaction.editReply("❌ AVATAR_ALLOWED_ROLE_ID não configurado.");
+      }
+
+      if (!memberRoles || !memberRoles.has(allowedRoleId)) {
+        return await interaction.editReply("❌ Você não tem o cargo permitido para usar este comando.");
+      }
+      */
+
+      // TESTE TEMPORÁRIO:
+      // limite diário desativado pra não atrapalhar os testes
+      /*
+      const usedToday = getUserUsageToday(interaction.user.id);
+      console.log("Usos hoje:", usedToday);
+
+      if (usedToday >= 2) {
+        return await interaction.editReply("❌ Você já usou suas 2 avaliações de hoje.");
+      }
+      */
 
       let user;
 
       if (id) {
+        console.log("Buscando usuário por ID...");
         user = await getUserById(id);
       } else {
+        console.log("Buscando usuário por nick...");
         user = await getUserByUsername(nick);
       }
 
-      const imageUrl = await getAvatarImage(user.userId);
+      console.log("Usuário Roblox encontrado:", user);
 
+      if (!user || !user.userId) {
+        return await interaction.editReply("❌ Não consegui encontrar esse usuário no Roblox.");
+      }
+
+      const imageUrl = await getAvatarImage(user.userId);
+      console.log("Avatar URL:", imageUrl);
+
+      if (!imageUrl) {
+        return await interaction.editReply("❌ Não consegui obter a imagem do avatar.");
+      }
+
+      console.log("Enviando avatar para a IA...");
       const review = await reviewAvatarImage({
         imageUrl,
         username: user.username,
@@ -104,13 +136,26 @@ module.exports = {
         modo,
       });
 
-      const currentUsage = incrementUserUsage(interaction.user.id);
+      console.log("Review IA:", JSON.stringify(review, null, 2));
+
+      if (!review || typeof review !== "object") {
+        return await interaction.editReply("❌ A IA não retornou uma avaliação válida.");
+      }
+
       const c = review.criterios || {};
+
+      // TESTE TEMPORÁRIO:
+      // não incrementa uso diário durante os testes
+      const currentUsage = 0;
 
       const embed = new EmbedBuilder()
         .setTitle(`${scoreEmoji(review.nota_final)} Avaliação Premium do Avatar`)
         .setDescription(
-          `**${user.displayName}** (@${user.username})\nID: \`${user.userId}\`\nModo: \`${modo}\`\nUso de hoje: **${currentUsage}/2**\n\n${review.resumo || "Sem resumo."}`
+          `**${user.displayName || user.username}** (@${user.username || "desconhecido"})\n` +
+            `ID: \`${user.userId}\`\n` +
+            `Modo: \`${modo}\`\n` +
+            `Uso de hoje: **${currentUsage}/2**\n\n` +
+            `${review.resumo || "Sem resumo."}`
         )
         .setThumbnail(imageUrl)
         .addFields(
@@ -182,15 +227,18 @@ module.exports = {
         .setTimestamp();
 
       await interaction.editReply({ embeds: [embed] });
+      console.log("=== /avaliaravatar finalizado com sucesso ===");
     } catch (error) {
       console.error("Erro no comando /avaliaravatar:", error);
 
       const message =
         error?.status === 429 || error?.code === "insufficient_quota"
           ? "❌ A IA está sem quota/saldo no momento."
+          : error?.message
+          ? `❌ Erro: ${error.message}`
           : "❌ Deu erro ao avaliar esse avatar.";
 
-      await interaction.editReply(message);
+      await interaction.editReply(message).catch(() => {});
     }
   },
 };
