@@ -26,7 +26,8 @@ function buildPublicGameEmbed(game, creatorId, opponentId) {
         `**Status:** ${game.status === "waiting_accept" ? "Aguardando aceite" : "Em andamento"}\n` +
         `**Placar:** ${game.players.p1.name} 0 x 0 ${game.players.p2.name}\n` +
         `**Valor da mão:** ${game.roundValue}\n` +
-        `**Vez:** ${game.players[game.currentTurn].name}`
+        `**Vez:** ${game.players[game.currentTurn].name}\n\n` +
+        `**Última ação:** ${game.lastAction}`
     )
     .setColor(0x5865f2)
     .setFooter({ text: "As cartas ficam ocultas. Só as ações aparecem para todos." })
@@ -142,6 +143,7 @@ module.exports = {
       },
       deck: remainingDeck,
       createdAt: Date.now(),
+      lastAction: "Aguardando o aceite do oponente.",
     };
 
     setGame(game);
