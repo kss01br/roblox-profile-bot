@@ -98,6 +98,11 @@ function startNewHand(game, starterKey) {
   const deck = shuffleDeck(createDeck());
   const { p1Hand, p2Hand, remainingDeck } = dealHands(deck);
 
+  // guarda o histórico da mão que acabou antes de limpar
+  game.lastHandSummary = Array.isArray(game.roundHistory)
+    ? [...game.roundHistory]
+    : [];
+
   game.players.p1.hand = p1Hand;
   game.players.p2.hand = p2Hand;
   game.deck = remainingDeck;
@@ -106,12 +111,12 @@ function startNewHand(game, starterKey) {
   game.roundStarter = starterKey;
   game.currentTurn = starterKey;
   game.roundResults = [];
+  game.roundHistory = [];
   game.playedCards = { p1: null, p2: null };
   game.displayedCards = { p1: null, p2: null };
   game.roundValue = 1;
   game.pendingTruco = null;
   game.status = "playing";
-  game.roundHistory = [];
 }
 
 function awardHandPoints(game, winnerKey, points) {

@@ -241,9 +241,15 @@ function buildHandButtons(matchId, hand, disabled = false) {
   return row;
 }
 
-function buildPublicHistoryText(roundHistory = []) {
-  if (!roundHistory.length) return "Nenhuma rodada concluída.";
-  return roundHistory.slice(-3).join("\n");
+function buildPublicHistoryText(game) {
+  const current = Array.isArray(game.roundHistory) ? game.roundHistory : [];
+  const previous = Array.isArray(game.lastHandSummary) ? game.lastHandSummary : [];
+
+  const source = current.length > 0 ? current : previous;
+
+  if (!source.length) return "Nenhuma rodada concluída.";
+
+  return source.slice(-3).join("\n");
 }
 
 function buildPublicGameEmbed(game) {
@@ -258,7 +264,7 @@ function buildPublicGameEmbed(game) {
       `**Mão:** ${handValueText}\n` +
       `**Truco:** ${trucoText}\n\n` +
       `**Status:** ${game.actionText}\n\n` +
-      `**Histórico curto:**\n${buildPublicHistoryText(game.roundHistory)}`
+      `**Histórico curto:**\n${buildPublicHistoryText(game)}`
     )
     .setColor(game.status === "finished" ? 0x22c55e : 0x5865f2)
     .setImage("attachment://truco-board.png")
