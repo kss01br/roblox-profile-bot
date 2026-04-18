@@ -13,10 +13,12 @@ const {
 const {
   createMatchId,
   setGame,
-  formatHand,
 } = require("../games/trucoManager");
 
 function buildPublicGameEmbed(game, creatorId, opponentId) {
+  const p1Played = game.playedCards.p1 ? game.playedCards.p1.label : "—";
+  const p2Played = game.playedCards.p2 ? game.playedCards.p2.label : "—";
+
   return new EmbedBuilder()
     .setTitle("🃏 Truco Lunar")
     .setDescription(
@@ -24,13 +26,16 @@ function buildPublicGameEmbed(game, creatorId, opponentId) {
         `<@${creatorId}> vs <@${opponentId}>\n` +
         `ID: \`${game.id}\`\n\n` +
         `**Status:** ${game.status === "waiting_accept" ? "Aguardando aceite" : "Em andamento"}\n` +
-        `**Placar:** ${game.players.p1.name} 0 x 0 ${game.players.p2.name}\n` +
+        `**Placar:** ${game.players.p1.name} ${game.score.p1} x ${game.score.p2} ${game.players.p2.name}\n` +
         `**Valor da mão:** ${game.roundValue}\n` +
         `**Vez:** ${game.players[game.currentTurn].name}\n\n` +
+        `**Cartas na rodada**\n` +
+        `${game.players.p1.name}: ${p1Played}\n` +
+        `${game.players.p2.name}: ${p2Played}\n\n` +
         `**Última ação:** ${game.lastAction}`
     )
     .setColor(0x5865f2)
-    .setFooter({ text: "As cartas ficam ocultas. Só as ações aparecem para todos." })
+    .setFooter({ text: "As cartas da mão ficam privadas. As jogadas aparecem para ambos." })
     .setTimestamp();
 }
 
@@ -159,14 +164,5 @@ module.exports = {
     });
 
     game.messageId = reply.id;
-
-    await interaction.followUp({
-      content:
-        `🃏 **Sua mão**\n\n` +
-        `Partida: \`${matchId}\`\n` +
-        `Oponente: **${opponent.username}**\n\n` +
-        `${formatHand(p1Hand)}`,
-      flags: 64,
-    });
   },
 };

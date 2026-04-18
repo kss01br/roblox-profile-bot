@@ -13,6 +13,13 @@ const {
   getOpponentKey,
   resolveRound,
   awardHandPoints,
+  makePlayText,
+  makeRoundText,
+  makeDrawText,
+  makeHandText,
+  makeTrucoText,
+  makeRunText,
+  makeMatchWinText,
 } = require("../games/trucoLogic");
 
 function formatRoundResults(roundResults) {
@@ -28,8 +35,8 @@ function formatRoundResults(roundResults) {
 }
 
 function buildPublicGameEmbed(game) {
-  const p1Played = game.playedCards.p1 ? "✅ Jogou" : "⌛ Aguardando";
-  const p2Played = game.playedCards.p2 ? "✅ Jogou" : "⌛ Aguardando";
+  const p1Played = game.playedCards.p1 ? game.playedCards.p1.label : "—";
+  const p2Played = game.playedCards.p2 ? game.playedCards.p2.label : "—";
 
   return new EmbedBuilder()
     .setTitle("🃏 Truco Lunar")
@@ -42,14 +49,14 @@ function buildPublicGameEmbed(game) {
         `**Cartas restantes**\n` +
         `${game.players.p1.name}: ${game.players.p1.hand.length}\n` +
         `${game.players.p2.name}: ${game.players.p2.hand.length}\n\n` +
-        `**Status da rodada**\n` +
+        `**Cartas jogadas na rodada**\n` +
         `${game.players.p1.name}: ${p1Played}\n` +
         `${game.players.p2.name}: ${p2Played}\n\n` +
         `**Rodadas:** ${formatRoundResults(game.roundResults)}\n\n` +
         `**Última ação:** ${game.lastAction}`
     )
     .setColor(game.status === "finished" ? 0x22c55e : 0x5865f2)
-    .setFooter({ text: "As cartas continuam privadas." })
+    .setFooter({ text: "As mãos continuam privadas." })
     .setTimestamp();
 }
 
@@ -65,8 +72,8 @@ function buildAcceptRow(matchId) {
 function buildGameRow(matchId, disabled = false) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`truco_viewhand_${matchId}`)
-      .setLabel("Ver minha mão")
+      .setCustomId(`truco_openhand_${matchId}`)
+      .setLabel("Começar partida")
       .setStyle(ButtonStyle.Primary)
       .setDisabled(disabled),
     new ButtonBuilder()
@@ -91,7 +98,7 @@ function buildPrivateHandEmbed(game, playerKey) {
   if (game.status !== "playing") {
     statusText = "A partida ainda não está em andamento.";
   } else if (alreadyPlayed) {
-    statusText = "Você já jogou sua carta nesta rodada.";
+    statusText = "Você já jogou nesta rodada.";
   } else if (isTurn) {
     statusText = "É sua vez de jogar.";
   } else {
@@ -118,7 +125,7 @@ function buildHandButtons(matchId, hand, disabled = false) {
     row.addComponents(
       new ButtonBuilder()
         .setCustomId(`truco_play_${matchId}_${index}`)
-        .setLabel(`Carta ${index + 1}`)
+        .setLabel(card.label.slice(0, 80))
         .setStyle(ButtonStyle.Primary)
         .setDisabled(disabled)
     );
@@ -254,23 +261,13 @@ module.exports = async (interaction, client) => {
           content: `✅ Partida aceita! <@${game.creatorId}> vs <@${game.opponentId}>`,
         });
 
-        return interaction.followUp({
-          embeds: [buildPrivateHandEmbed(game, playerKey)],
-          components: [
-            buildHandButtons(
-              matchId,
-              game.players[playerKey].hand,
-              game.currentTurn !== playerKey || !!game.playedCards[playerKey]
-            ),
-          ],
-          flags: 64,
-        });
+        return;
       }
 
-      if (action === "viewhand") {
+      if (action === "openhand") {
         if (game.status !== "playing") {
           return interaction.reply({
-            content: "❌ Você só pode ver sua mão depois que a partida for aceita.",
+            content: "❌ Você só pode abrir sua mão depois que a partida for aceita.",
             flags: 64,
           });
         }
@@ -306,13 +303,15 @@ module.exports = async (interaction, client) => {
         }
 
         game.roundValue = 3;
-        game.lastAction = `${interaction.user.username} pediu TRUCO! A mão agora vale 3 pontos.`;
+        game.lastAction = makeTrucoText(interaction.user.username);
 
-        await updatePublicGameMessage(client, game);
-
-        return interaction.reply({
-          content: `🗣️ **${interaction.user.username} pediu TRUCO!** Agora a mão vale **3 pontos**.`,
+        await interaction.update({
+          embeds: [buildPublicGameEmbed(game)],
+          components: [buildGameRow(matchId)],
+          content: `✅ Partida aceita! <@${game.creatorId}> vs <@${game.opponentId}>`,
         });
+
+        return;
       }
 
       if (action === "run") {
@@ -327,16 +326,25 @@ module.exports = async (interaction, client) => {
         const result = awardHandPoints(game, winnerKey, game.roundValue);
 
         if (result.finished) {
-          game.lastAction = `${interaction.user.username} correu. ${game.players[winnerKey].name} venceu a partida!`;
+          game.lastAction = makeMatchWinText(game.players[winnerKey].name);
         } else {
-          game.lastAction = `${interaction.user.username} correu. ${game.players[winnerKey].name} ganhou ${game.roundValue} ponto(s) e começa a próxima mão.`;
+          game.lastAction = makeRunText(
+            interaction.user.username,
+            game.players[winnerKey].name,
+            game.roundValue
+          );
         }
 
-        await updatePublicGameMessage(client, game);
-
-        return interaction.reply({
-          content: `🏳️ **${interaction.user.username} correu da mão.**`,
+        await interaction.update({
+          embeds: [buildPublicGameEmbed(game)],
+          components: [buildGameRow(matchId, game.status === "finished")],
+          content:
+            game.status === "finished"
+              ? `🏆 Partida finalizada! <@${game.players.p1.id}> vs <@${game.players.p2.id}>`
+              : `✅ Partida aceita! <@${game.creatorId}> vs <@${game.opponentId}>`,
         });
+
+        return;
       }
 
       if (action === "play") {
@@ -370,62 +378,66 @@ module.exports = async (interaction, client) => {
 
         const playedCard = game.players[playerKey].hand.splice(cardIndex, 1)[0];
         game.playedCards[playerKey] = playedCard;
-        game.lastAction = `${interaction.user.username} jogou uma carta.`;
 
         const opponentKey = getOpponentKey(playerKey);
+        game.lastAction = makePlayText(interaction.user.username, playedCard.label);
 
         if (!game.playedCards[opponentKey]) {
           game.currentTurn = opponentKey;
 
           await updatePublicGameMessage(client, game);
 
-          if (interaction.channel) {
-            await interaction.channel.send({
-              content: `🂠 **${interaction.user.username} jogou uma carta.**`,
-            });
-          }
+          const disabled =
+            game.currentTurn !== playerKey ||
+            !!game.playedCards[playerKey] ||
+            game.players[playerKey].hand.length === 0;
 
-          return interaction.reply({
-            content: `✅ Você jogou sua carta: **${playedCard.label}**`,
-            flags: 64,
+          return interaction.update({
+            embeds: [buildPrivateHandEmbed(game, playerKey)],
+            components:
+              game.players[playerKey].hand.length > 0
+                ? [buildHandButtons(matchId, game.players[playerKey].hand, disabled)]
+                : [],
           });
         }
 
+        const p1Card = game.playedCards.p1;
+        const p2Card = game.playedCards.p2;
+
         const { roundWinner, handWinner } = resolveRound(game);
 
-        let publicText = "";
-
         if (roundWinner === "draw") {
-          publicText = "🤝 Rodada empatada.";
-          game.lastAction = "A rodada empatou.";
+          game.lastAction = makeDrawText(p1Card.label, p2Card.label);
         } else {
-          publicText = `🏆 ${game.players[roundWinner].name} venceu a rodada.`;
-          game.lastAction = `${game.players[roundWinner].name} venceu a rodada.`;
+          const winnerCard = roundWinner === "p1" ? p1Card.label : p2Card.label;
+          const loserCard = roundWinner === "p1" ? p2Card.label : p1Card.label;
+          game.lastAction = makeRoundText(game.players[roundWinner].name, winnerCard, loserCard);
         }
 
         if (handWinner) {
-          const result = awardHandPoints(game, handWinner, game.roundValue);
+          const awardedPoints = game.roundValue;
+          const result = awardHandPoints(game, handWinner, awardedPoints);
 
           if (result.finished) {
-            publicText += `\n👑 **${game.players[handWinner].name} venceu a partida!**`;
-            game.lastAction = `${game.players[handWinner].name} venceu a partida.`;
+            game.lastAction = makeMatchWinText(game.players[handWinner].name);
           } else {
-            publicText += `\n🃏 ${game.players[handWinner].name} venceu a mão e ganhou ${game.roundValue} ponto(s). Nova mão iniciada.`;
-            game.lastAction = `${game.players[handWinner].name} venceu a mão e começa a próxima.`;
+            game.lastAction = `${makeHandText(game.players[handWinner].name, awardedPoints)} Nova mão iniciada.`;
           }
         }
 
         await updatePublicGameMessage(client, game);
 
-        if (interaction.channel) {
-          await interaction.channel.send({
-            content: publicText,
-          });
-        }
+        const disabled =
+          game.currentTurn !== playerKey ||
+          !!game.playedCards[playerKey] ||
+          game.players[playerKey].hand.length === 0;
 
-        return interaction.reply({
-          content: `✅ Você jogou sua carta: **${playedCard.label}**`,
-          flags: 64,
+        return interaction.update({
+          embeds: [buildPrivateHandEmbed(game, playerKey)],
+          components:
+            game.players[playerKey].hand.length > 0
+              ? [buildHandButtons(matchId, game.players[playerKey].hand, disabled)]
+              : [],
         });
       }
     } catch (error) {

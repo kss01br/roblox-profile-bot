@@ -16,6 +16,10 @@ const manilhaStrength = {
   M4: 10,
 };
 
+function pickRandom(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
 function getOpponentKey(playerKey) {
   return playerKey === "p1" ? "p2" : "p1";
 }
@@ -132,10 +136,75 @@ function awardHandPoints(game, winnerKey, points) {
   };
 }
 
+function makePlayText(playerName, cardLabel) {
+  return pickRandom([
+    `${playerName} jogou **${cardLabel}**.`,
+    `${playerName} colocou **${cardLabel}** na mesa.`,
+    `${playerName} respondeu com **${cardLabel}**.`,
+    `${playerName} mandou **${cardLabel}**.`,
+  ]);
+}
+
+function makeRoundText(winnerName, winnerCard, loserCard) {
+  return pickRandom([
+    `${winnerName} venceu a rodada com **${winnerCard}** contra **${loserCard}**.`,
+    `A carta maior falou mais alto: **${winnerCard}** de ${winnerName}.`,
+    `${winnerName} levou a rodada. **${winnerCard}** passou por cima de **${loserCard}**.`,
+    `${winnerName} não deixou barato: **${winnerCard}** venceu **${loserCard}**.`,
+  ]);
+}
+
+function makeDrawText(cardA, cardB) {
+  return pickRandom([
+    `Rodada empatada: **${cardA}** contra **${cardB}**.`,
+    `Ninguém levou essa. **${cardA}** e **${cardB}** ficaram iguais.`,
+    `Empate na rodada. **${cardA}** bateu de frente com **${cardB}**.`,
+  ]);
+}
+
+function makeHandText(winnerName, points) {
+  return pickRandom([
+    `${winnerName} venceu a mão e ganhou **${points} ponto(s)**.`,
+    `${winnerName} fechou a mão e somou **${points} ponto(s)**.`,
+    `${winnerName} tomou a frente e levou **${points} ponto(s)**.`,
+  ]);
+}
+
+function makeTrucoText(playerName) {
+  return pickRandom([
+    `${playerName} pediu **TRUCO**! Vai deixar ele crescer assim?`,
+    `${playerName} gritou **TRUCO**! O clima esquentou.`,
+    `${playerName} chamou no peito: **TRUCO**.`,
+  ]);
+}
+
+function makeRunText(playerName, winnerName, points) {
+  return pickRandom([
+    `${playerName} correu. ${winnerName} levou **${points} ponto(s)**.`,
+    `${playerName} arregou na mão. ${winnerName} soma **${points} ponto(s)**.`,
+    `${playerName} saiu da disputa. ${winnerName} ganha **${points} ponto(s)**.`,
+  ]);
+}
+
+function makeMatchWinText(winnerName) {
+  return pickRandom([
+    `${winnerName} venceu a partida!`,
+    `${winnerName} fechou o jogo e saiu com a vitória!`,
+    `${winnerName} dominou a mesa e ganhou a partida!`,
+  ]);
+}
+
 module.exports = {
   getOpponentKey,
   compareCards,
   resolveRound,
   startNewHand,
   awardHandPoints,
+  makePlayText,
+  makeRoundText,
+  makeDrawText,
+  makeHandText,
+  makeTrucoText,
+  makeRunText,
+  makeMatchWinText,
 };
