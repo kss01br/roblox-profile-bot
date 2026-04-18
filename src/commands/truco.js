@@ -1,10 +1,4 @@
-const {
-  SlashCommandBuilder,
-  EmbedBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-} = require("discord.js");
+const { SlashCommandBuilder } = require("discord.js");
 const {
   createDeck,
   shuffleDeck,
@@ -14,39 +8,7 @@ const {
   createMatchId,
   setGame,
 } = require("../games/trucoManager");
-
-function buildPublicGameEmbed(game, creatorId, opponentId) {
-  const p1Played = game.playedCards.p1 ? game.playedCards.p1.label : "—";
-  const p2Played = game.playedCards.p2 ? game.playedCards.p2.label : "—";
-
-  return new EmbedBuilder()
-    .setTitle("🃏 Truco Lunar")
-    .setDescription(
-      `**Partida criada**\n\n` +
-        `<@${creatorId}> vs <@${opponentId}>\n` +
-        `ID: \`${game.id}\`\n\n` +
-        `**Status:** ${game.status === "waiting_accept" ? "Aguardando aceite" : "Em andamento"}\n` +
-        `**Placar:** ${game.players.p1.name} ${game.score.p1} x ${game.score.p2} ${game.players.p2.name}\n` +
-        `**Valor da mão:** ${game.roundValue}\n` +
-        `**Vez:** ${game.players[game.currentTurn].name}\n\n` +
-        `**Cartas na rodada**\n` +
-        `${game.players.p1.name}: ${p1Played}\n` +
-        `${game.players.p2.name}: ${p2Played}\n\n` +
-        `**Última ação:** ${game.lastAction}`
-    )
-    .setColor(0x5865f2)
-    .setFooter({ text: "As cartas da mão ficam privadas. As jogadas aparecem para ambos." })
-    .setTimestamp();
-}
-
-function buildAcceptRow(matchId) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`truco_accept_${matchId}`)
-      .setLabel("Aceitar partida")
-      .setStyle(ButtonStyle.Success)
-  );
-}
+const { createPublicMessagePayload } = require("../games/trucoViews");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -146,6 +108,10 @@ module.exports = {
         p1: null,
         p2: null,
       },
+      displayedCards: {
+        p1: null,
+        p2: null,
+      },
       deck: remainingDeck,
       createdAt: Date.now(),
       lastAction: "Aguardando o aceite do oponente.",
@@ -153,13 +119,9 @@ module.exports = {
 
     setGame(game);
 
-    const embed = buildPublicGameEmbed(game, interaction.user.id, opponent.id);
-    const row = buildAcceptRow(matchId);
-
+    const payload = await createPublicMessagePayload(game);
     const reply = await interaction.reply({
-      content: `🎮 <@${opponent.id}>, você foi desafiado para uma partida de truco.`,
-      embeds: [embed],
-      components: [row],
+      ...payload,
       fetchReply: true,
     });
 
