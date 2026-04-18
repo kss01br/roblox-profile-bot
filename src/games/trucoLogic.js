@@ -26,11 +26,7 @@ function getOpponentKey(playerKey) {
 
 function getCardStrength(card) {
   if (!card) return 0;
-
-  if (card.type === "manilha") {
-    return manilhaStrength[card.rank] || 0;
-  }
-
+  if (card.type === "manilha") return manilhaStrength[card.rank] || 0;
   return normalStrength[card.rank] || 0;
 }
 
@@ -62,7 +58,6 @@ function checkHandWinner(roundResults, handStarter) {
 
   if (roundResults.length === 3) {
     if (roundResults[2] !== "draw") return roundResults[2];
-
     const firstNonDraw = roundResults.find((r) => r !== "draw");
     return firstNonDraw || handStarter;
   }
@@ -111,17 +106,11 @@ function startNewHand(game, starterKey) {
   game.roundStarter = starterKey;
   game.currentTurn = starterKey;
   game.roundResults = [];
-  game.playedCards = {
-    p1: null,
-    p2: null,
-  };
-  game.displayedCards = {
-    p1: null,
-    p2: null,
-  };
+  game.playedCards = { p1: null, p2: null };
+  game.displayedCards = { p1: null, p2: null };
   game.roundValue = 1;
-  game.status = "playing";
   game.pendingTruco = null;
+  game.status = "playing";
 }
 
 function awardHandPoints(game, winnerKey, points) {
@@ -130,7 +119,6 @@ function awardHandPoints(game, winnerKey, points) {
   if (game.score[winnerKey] >= 8) {
     game.status = "finished";
     game.currentTurn = winnerKey;
-
     return {
       finished: true,
       matchWinner: winnerKey,

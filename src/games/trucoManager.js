@@ -22,15 +22,6 @@ function findPlayerKey(game, userId) {
   return null;
 }
 
-function isPlayerInGame(game, userId) {
-  return !!findPlayerKey(game, userId);
-}
-
-function formatHand(hand) {
-  if (!hand || hand.length === 0) return "Sem cartas.";
-  return hand.map((card, index) => `${index + 1}. ${card.label}`).join("\n");
-}
-
 module.exports = {
   activeGames,
   createMatchId,
@@ -38,6 +29,4 @@ module.exports = {
   getGame,
   deleteGame,
   findPlayerKey,
-  isPlayerInGame,
-  formatHand,
 };

@@ -32,12 +32,8 @@ function walkFiles(dir) {
 
   for (const entry of entries) {
     const full = path.join(dir, entry.name);
-
-    if (entry.isDirectory()) {
-      results.push(...walkFiles(full));
-    } else {
-      results.push(full);
-    }
+    if (entry.isDirectory()) results.push(...walkFiles(full));
+    else results.push(full);
   }
 
   return results;
@@ -62,7 +58,6 @@ function getNormalCardPath(card) {
   const rank = getRankFile(card.rank);
 
   if (!suit || !rank) return null;
-
   return findCardFileByBaseName(`card_${suit}_${rank}`);
 }
 
@@ -108,10 +103,7 @@ async function loadCardBuffer(card) {
 
   if (normalPath) {
     return sharp(normalPath)
-      .resize(240, 340, {
-        fit: "contain",
-        background: "#0b1020",
-      })
+      .resize(240, 340, { fit: "contain", background: "#0b1020" })
       .png()
       .toBuffer();
   }
@@ -176,9 +168,7 @@ async function renderHandImage(hand) {
   }
 
   const buffers = [];
-  for (const card of hand) {
-    buffers.push(await loadCardBuffer(card));
-  }
+  for (const card of hand) buffers.push(await loadCardBuffer(card));
 
   return composeCards(buffers, {
     cardWidth: 180,
@@ -211,13 +201,8 @@ function buildPendingTrucoRow(matchId) {
   );
 }
 
-function buildGameRow(matchId, disabled = false) {
+function buildPublicControlsRow(matchId, disabled = false) {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`truco_openhand_${matchId}`)
-      .setLabel("Ver minha mão")
-      .setStyle(ButtonStyle.Primary)
-      .setDisabled(disabled),
     new ButtonBuilder()
       .setCustomId(`truco_truco_${matchId}`)
       .setLabel("Truco")
@@ -258,7 +243,7 @@ function buildPublicGameEmbed(game) {
     )
     .setColor(game.status === "finished" ? 0x22c55e : 0x5865f2)
     .setImage("attachment://truco-board.png")
-    .setFooter({ text: "As mãos ficam privadas. A mesa é pública." })
+    .setFooter({ text: "Mesa pública. Mãos em canais privados da partida." })
     .setTimestamp();
 }
 
@@ -270,6 +255,8 @@ function buildPrivateHandEmbed(game, playerKey) {
   let statusText = "Aguardando.";
   if (game.status !== "playing") {
     statusText = "A partida ainda não está em andamento.";
+  } else if (game.pendingTruco) {
+    statusText = "Aguardando resposta do truco.";
   } else if (alreadyPlayed) {
     statusText = "Você já jogou nesta rodada.";
   } else if (isTurn) {
@@ -300,9 +287,9 @@ async function createPublicMessagePayload(game) {
   } else if (game.status === "playing" && game.pendingTruco) {
     components = [buildPendingTrucoRow(game.id)];
   } else if (game.status === "playing") {
-    components = [buildGameRow(game.id)];
+    components = [buildPublicControlsRow(game.id)];
   } else {
-    components = [buildGameRow(game.id, true)];
+    components = [buildPublicControlsRow(game.id, true)];
   }
 
   return {
