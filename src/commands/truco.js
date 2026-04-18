@@ -114,7 +114,8 @@ module.exports = {
       },
       deck: remainingDeck,
       createdAt: Date.now(),
-      lastAction: "Aguardando o aceite do oponente.",
+      actionText: "Aguardando o aceite do oponente.",
+      pendingTruco: null,
     };
 
     setGame(game);

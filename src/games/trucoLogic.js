@@ -121,6 +121,7 @@ function startNewHand(game, starterKey) {
   };
   game.roundValue = 1;
   game.status = "playing";
+  game.pendingTruco = null;
 }
 
 function awardHandPoints(game, winnerKey, points) {
@@ -171,7 +172,7 @@ function makeHandText(winnerName, points) {
 
 function makeTrucoText(playerName) {
   return pickRandom([
-    `${playerName} pediu TRUCO! Vai deixar ele crescer assim?`,
+    `${playerName} pediu TRUCO! Vai aceitar?`,
     `${playerName} gritou TRUCO! O clima esquentou.`,
     `${playerName} chamou no peito: TRUCO.`,
   ]);

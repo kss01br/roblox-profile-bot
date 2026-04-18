@@ -144,6 +144,13 @@ module.exports = async (interaction, client) => {
         });
       }
 
+      if (game.pendingTruco) {
+        return interaction.reply({
+          content: "❌ Já existe um pedido de truco pendente.",
+          flags: 64,
+        });
+      }
+
       if (game.roundValue >= 3) {
         return interaction.reply({
           content: "❌ Essa mão já está valendo 3 pontos.",
@@ -151,8 +158,33 @@ module.exports = async (interaction, client) => {
         });
       }
 
-      game.roundValue = 3;
+      game.pendingTruco = {
+        requestedBy: playerKey,
+      };
       game.actionText = makeTrucoText(interaction.user.username);
+
+      await interaction.update(await createPublicMessagePayload(game));
+      return;
+    }
+
+    if (action === "accepttruco") {
+      if (!game.pendingTruco) {
+        return interaction.reply({
+          content: "❌ Não existe truco pendente.",
+          flags: 64,
+        });
+      }
+
+      if (game.pendingTruco.requestedBy === playerKey) {
+        return interaction.reply({
+          content: "❌ Você não pode aceitar o próprio truco.",
+          flags: 64,
+        });
+      }
+
+      game.roundValue = 3;
+      game.pendingTruco = null;
+      game.actionText = `${interaction.user.username} aceitou o TRUCO. A mão agora vale 3 pontos.`;
 
       await interaction.update(await createPublicMessagePayload(game));
       return;
@@ -169,6 +201,8 @@ module.exports = async (interaction, client) => {
       const winnerKey = getOpponentKey(playerKey);
       const points = game.roundValue;
       const result = awardHandPoints(game, winnerKey, points);
+
+      game.pendingTruco = null;
 
       if (result.finished) {
         game.actionText = makeMatchWinText(game.players[winnerKey].name);
@@ -192,6 +226,13 @@ module.exports = async (interaction, client) => {
         });
       }
 
+      if (game.pendingTruco) {
+        return interaction.reply({
+          content: "❌ Resolva o pedido de truco antes de jogar.",
+          flags: 64,
+        });
+      }
+
       if (game.currentTurn !== playerKey) {
         return interaction.reply({
           content: "❌ Não é sua vez.",
@@ -211,6 +252,13 @@ module.exports = async (interaction, client) => {
           content: "❌ Carta inválida.",
           flags: 64,
         });
+      }
+
+      if (!game.playedCards.p1 && !game.playedCards.p2) {
+        game.displayedCards = {
+          p1: null,
+          p2: null,
+        };
       }
 
       const playedCard = game.players[playerKey].hand.splice(cardIndex, 1)[0];

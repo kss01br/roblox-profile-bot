@@ -45,7 +45,6 @@ function walkFiles(dir) {
 
 function findCardFileByBaseName(baseName) {
   const allFiles = walkFiles(CARD_DIR);
-
   const normalizedBase = baseName.toLowerCase();
 
   for (const file of allFiles) {
@@ -199,6 +198,19 @@ function buildAcceptRow(matchId) {
   );
 }
 
+function buildPendingTrucoRow(matchId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`truco_accepttruco_${matchId}`)
+      .setLabel("Aceitar Truco")
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`truco_run_${matchId}`)
+      .setLabel("Correr")
+      .setStyle(ButtonStyle.Secondary)
+  );
+}
+
 function buildGameRow(matchId, disabled = false) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -240,10 +252,9 @@ function buildPublicGameEmbed(game) {
     .setTitle("🃏 Truco Lunar")
     .setDescription(
       `**${game.players.p1.name}** ${game.score.p1} x ${game.score.p2} **${game.players.p2.name}**\n` +
-        `**ID:** \`${game.id}\`\n` +
         `**Valor da mão:** ${game.roundValue}\n` +
         `**Vez:** ${game.players[game.currentTurn]?.name || "-"}\n\n` +
-        `**Ação atual:** ${game.actionText}`
+        `**Status:** ${game.actionText}`
     )
     .setColor(game.status === "finished" ? 0x22c55e : 0x5865f2)
     .setImage("attachment://truco-board.png")
@@ -270,8 +281,7 @@ function buildPrivateHandEmbed(game, playerKey) {
   return new EmbedBuilder()
     .setTitle("🃏 Sua mão")
     .setDescription(
-      `**Partida:** \`${game.id}\`\n` +
-        `**Adversário:** ${game.players[opponentKey].name}\n` +
+      `**Adversário:** ${game.players[opponentKey].name}\n` +
         `**Valor da mão:** ${game.roundValue}\n` +
         `**Status:** ${statusText}`
     )
@@ -287,6 +297,8 @@ async function createPublicMessagePayload(game) {
   let components = [];
   if (game.status === "waiting_accept") {
     components = [buildAcceptRow(game.id)];
+  } else if (game.status === "playing" && game.pendingTruco) {
+    components = [buildPendingTrucoRow(game.id)];
   } else if (game.status === "playing") {
     components = [buildGameRow(game.id)];
   } else {
@@ -314,7 +326,8 @@ async function createPrivateHandPayload(game, playerKey) {
     game.currentTurn !== playerKey ||
     !!game.playedCards[playerKey] ||
     game.players[playerKey].hand.length === 0 ||
-    game.status !== "playing";
+    game.status !== "playing" ||
+    !!game.pendingTruco;
 
   return {
     embeds: [buildPrivateHandEmbed(game, playerKey)],
