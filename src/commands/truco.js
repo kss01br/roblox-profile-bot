@@ -7,8 +7,12 @@ const {
 const {
   createMatchId,
   setGame,
+  isUserInAnyGame,
 } = require("../games/trucoManager");
 const { createPublicMessagePayload } = require("../games/trucoViews");
+
+const TURN_TIMEOUT_MS = 2 * 60 * 1000;
+const IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -71,9 +75,25 @@ module.exports = {
       });
     }
 
+    if (isUserInAnyGame(interaction.user.id)) {
+      return interaction.reply({
+        content: "❌ Você já está em uma partida ativa.",
+        flags: 64,
+      });
+    }
+
+    if (isUserInAnyGame(opponent.id)) {
+      return interaction.reply({
+        content: "❌ O oponente já está em uma partida ativa.",
+        flags: 64,
+      });
+    }
+
     const deck = shuffleDeck(createDeck());
     const { p1Hand, p2Hand, remainingDeck } = dealHands(deck);
     const matchId = createMatchId();
+
+    const now = Date.now();
 
     const game = {
       id: matchId,
@@ -104,6 +124,7 @@ module.exports = {
       roundStarter: "p1",
       currentTurn: "p1",
       roundResults: [],
+      roundHistory: [],
       playedCards: {
         p1: null,
         p2: null,
@@ -113,9 +134,14 @@ module.exports = {
         p2: null,
       },
       deck: remainingDeck,
-      createdAt: Date.now(),
+      createdAt: now,
+      lastActionAt: now,
+      turnExpiresAt: now + TURN_TIMEOUT_MS,
+      idleTimeoutMs: IDLE_TIMEOUT_MS,
+      turnTimeoutMs: TURN_TIMEOUT_MS,
       actionText: "Aguardando o aceite do oponente.",
       pendingTruco: null,
+      statsRecorded: false,
     };
 
     setGame(game);

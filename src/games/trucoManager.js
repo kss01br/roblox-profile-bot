@@ -22,6 +22,18 @@ function findPlayerKey(game, userId) {
   return null;
 }
 
+function isUserInAnyGame(userId) {
+  for (const game of activeGames.values()) {
+    if (
+      game.status !== "finished" &&
+      (game.players.p1.id === userId || game.players.p2.id === userId)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 module.exports = {
   activeGames,
   createMatchId,
@@ -29,4 +41,5 @@ module.exports = {
   getGame,
   deleteGame,
   findPlayerKey,
+  isUserInAnyGame,
 };

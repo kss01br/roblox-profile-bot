@@ -111,6 +111,7 @@ function startNewHand(game, starterKey) {
   game.roundValue = 1;
   game.pendingTruco = null;
   game.status = "playing";
+  game.roundHistory = [];
 }
 
 function awardHandPoints(game, winnerKey, points) {

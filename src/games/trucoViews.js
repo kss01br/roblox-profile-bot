@@ -241,14 +241,24 @@ function buildHandButtons(matchId, hand, disabled = false) {
   return row;
 }
 
+function buildPublicHistoryText(roundHistory = []) {
+  if (!roundHistory.length) return "Nenhuma rodada concluída.";
+  return roundHistory.slice(-3).join("\n");
+}
+
 function buildPublicGameEmbed(game) {
+  const handValueText = game.roundValue === 3 ? "Valendo 3" : "Valendo 1";
+  const trucoText = game.pendingTruco ? "Pendente" : "Sem pedido";
+
   return new EmbedBuilder()
     .setTitle("🃏 Truco Lunar")
     .setDescription(
-      `**${game.players.p1.name}** ${game.score.p1} x ${game.score.p2} **${game.players.p2.name}**\n` +
-      `**Valor da mão:** ${game.roundValue}\n` +
-      `**Vez:** ${game.players[game.currentTurn]?.name || "-"}\n\n` +
-      `**Status:** ${game.actionText}`
+      `**${game.players.p1.name}** ${game.score.p1} x ${game.score.p2} **${game.players.p2.name}**\n\n` +
+      `**Vez:** ${game.players[game.currentTurn]?.name || "-"}\n` +
+      `**Mão:** ${handValueText}\n` +
+      `**Truco:** ${trucoText}\n\n` +
+      `**Status:** ${game.actionText}\n\n` +
+      `**Histórico curto:**\n${buildPublicHistoryText(game.roundHistory)}`
     )
     .setColor(game.status === "finished" ? 0x22c55e : 0x5865f2)
     .setImage("attachment://truco-board.png")

@@ -1,6 +1,8 @@
 const {
+  activeGames,
   getGame,
   findPlayerKey,
+  deleteGame,
 } = require("../games/trucoManager");
 const {
   getOpponentKey,
@@ -19,12 +21,24 @@ const {
   createPrivateHandPayload,
   createPostPlayEphemeralPayload,
 } = require("../games/trucoViews");
+const { recordMatchResult } = require("../games/trucoStats");
 
-console.log("trucoViews import:", {
-  createPublicMessagePayload: typeof createPublicMessagePayload,
-  createPrivateHandPayload: typeof createPrivateHandPayload,
-  createPostPlayEphemeralPayload: typeof createPostPlayEphemeralPayload,
-});
+function pushRoundHistory(game, winnerText) {
+  const nextRoundNumber = game.roundHistory.length + 1;
+  game.roundHistory.push(`${nextRoundNumber}ª rodada: ${winnerText}`);
+}
+
+function touchGame(game) {
+  game.lastActionAt = Date.now();
+}
+
+function resetTurnTimer(game) {
+  if (game.status === "playing") {
+    game.turnExpiresAt = Date.now() + (game.turnTimeoutMs || 120000);
+  } else {
+    game.turnExpiresAt = null;
+  }
+}
 
 async function resendPublicGameMessage(client, game) {
   const channel = await client.channels.fetch(game.channelId);
@@ -43,12 +57,80 @@ async function resendPublicGameMessage(client, game) {
         await oldMessage.delete().catch(() => {});
       }
     } catch {
-      // ignora se não achar a antiga
+      // ignora
     }
   }
 }
 
+async function finalizeByInactivity(client, game) {
+  game.status = "finished";
+  game.currentTurn = null;
+  game.actionText = "Partida encerrada por inatividade.";
+
+  await resendPublicGameMessage(client, game);
+  deleteGame(game.id);
+}
+
+async function finalizeByTurnTimeout(client, game) {
+  const loserKey = game.currentTurn;
+  const winnerKey = loserKey === "p1" ? "p2" : "p1";
+  const points = game.roundValue;
+
+  const result = awardHandPoints(game, winnerKey, points);
+  touchGame(game);
+
+  if (result.finished) {
+    game.actionText = `${game.players[loserKey].name} demorou demais. ${makeMatchWinText(game.players[winnerKey].name)}`;
+
+    if (!game.statsRecorded) {
+      recordMatchResult(game.players[winnerKey].id, game.players[loserKey].id);
+      game.statsRecorded = true;
+    }
+  } else {
+    game.actionText = `${game.players[loserKey].name} demorou demais. ${game.players[winnerKey].name} levou ${points} ponto(s). Nova mão iniciada.`;
+    resetTurnTimer(game);
+  }
+
+  await resendPublicGameMessage(client, game);
+
+  if (game.status === "finished") {
+    deleteGame(game.id);
+  }
+}
+
+function startTrucoMaintenance(client) {
+  if (client.__trucoMaintenanceStarted) return;
+  client.__trucoMaintenanceStarted = true;
+
+  setInterval(async () => {
+    const now = Date.now();
+
+    for (const game of activeGames.values()) {
+      try {
+        const idleLimit = game.idleTimeoutMs || 15 * 60 * 1000;
+
+        if (now - game.lastActionAt > idleLimit) {
+          await finalizeByInactivity(client, game);
+          continue;
+        }
+
+        if (
+          game.status === "playing" &&
+          game.turnExpiresAt &&
+          now > game.turnExpiresAt
+        ) {
+          await finalizeByTurnTimeout(client, game);
+        }
+      } catch (error) {
+        console.error("Erro na manutenção do truco:", error);
+      }
+    }
+  }, 15000);
+}
+
 module.exports = async (interaction, client) => {
+  startTrucoMaintenance(client);
+
   if (interaction.isChatInputCommand()) {
     const command = client.commands.get(interaction.commandName);
 
@@ -135,6 +217,8 @@ module.exports = async (interaction, client) => {
 
       game.status = "playing";
       game.actionText = `${interaction.user.username} aceitou a partida. ${game.players[game.currentTurn].name} começa.`;
+      touchGame(game);
+      resetTurnTimer(game);
 
       await interaction.deferUpdate();
       await resendPublicGameMessage(client, game);
@@ -144,7 +228,7 @@ module.exports = async (interaction, client) => {
     if (action === "openhand") {
       if (game.status !== "playing") {
         return interaction.reply({
-          content: "❌ Você só pode abrir sua mão depois que a partida for aceita.",
+          content: "❌ Você só pode jogar depois que a partida for aceita.",
           flags: 64,
         });
       }
@@ -181,6 +265,7 @@ module.exports = async (interaction, client) => {
         requestedBy: playerKey,
       };
       game.actionText = makeTrucoText(interaction.user.username);
+      touchGame(game);
 
       await interaction.deferUpdate();
       await resendPublicGameMessage(client, game);
@@ -205,6 +290,8 @@ module.exports = async (interaction, client) => {
       game.roundValue = 3;
       game.pendingTruco = null;
       game.actionText = `${interaction.user.username} aceitou o TRUCO. A mão agora vale 3 pontos.`;
+      touchGame(game);
+      resetTurnTimer(game);
 
       await interaction.deferUpdate();
       await resendPublicGameMessage(client, game);
@@ -220,23 +307,35 @@ module.exports = async (interaction, client) => {
       }
 
       const winnerKey = getOpponentKey(playerKey);
+      const loserKey = playerKey;
       const points = game.roundValue;
       const result = awardHandPoints(game, winnerKey, points);
 
       game.pendingTruco = null;
+      touchGame(game);
 
       if (result.finished) {
         game.actionText = makeMatchWinText(game.players[winnerKey].name);
+
+        if (!game.statsRecorded) {
+          recordMatchResult(game.players[winnerKey].id, game.players[loserKey].id);
+          game.statsRecorded = true;
+        }
       } else {
         game.actionText = makeRunText(
           interaction.user.username,
           game.players[winnerKey].name,
           points
         );
+        resetTurnTimer(game);
       }
 
       await interaction.deferUpdate();
       await resendPublicGameMessage(client, game);
+
+      if (game.status === "finished") {
+        deleteGame(game.id);
+      }
       return;
     }
 
@@ -283,12 +382,14 @@ module.exports = async (interaction, client) => {
       const playedCard = game.players[playerKey].hand.splice(cardIndex, 1)[0];
       game.playedCards[playerKey] = playedCard;
       game.displayedCards[playerKey] = playedCard;
+      touchGame(game);
 
       const opponentKey = getOpponentKey(playerKey);
 
       if (!game.playedCards[opponentKey]) {
         game.currentTurn = opponentKey;
         game.actionText = `${interaction.user.username} jogou ${getCardDisplayName(playedCard)}.`;
+        resetTurnTimer(game);
 
         await resendPublicGameMessage(client, game);
 
@@ -304,24 +405,39 @@ module.exports = async (interaction, client) => {
 
       if (roundWinner === "draw") {
         game.actionText = makeDrawText(cardP1Name, cardP2Name);
+        pushRoundHistory(game, "Empate");
       } else {
         const winnerCard = roundWinner === "p1" ? cardP1Name : cardP2Name;
         const loserCard = roundWinner === "p1" ? cardP2Name : cardP1Name;
         game.actionText = makeRoundText(game.players[roundWinner].name, winnerCard, loserCard);
+        pushRoundHistory(game, game.players[roundWinner].name);
       }
 
       if (handWinner) {
         const awardedPoints = game.roundValue;
+        const loserKey = handWinner === "p1" ? "p2" : "p1";
         const result = awardHandPoints(game, handWinner, awardedPoints);
 
         if (result.finished) {
           game.actionText = makeMatchWinText(game.players[handWinner].name);
+
+          if (!game.statsRecorded) {
+            recordMatchResult(game.players[handWinner].id, game.players[loserKey].id);
+            game.statsRecorded = true;
+          }
         } else {
           game.actionText = `${makeHandText(game.players[handWinner].name, awardedPoints)} Nova mão iniciada.`;
+          resetTurnTimer(game);
         }
+      } else {
+        resetTurnTimer(game);
       }
 
       await resendPublicGameMessage(client, game);
+
+      if (game.status === "finished") {
+        deleteGame(game.id);
+      }
 
       return interaction.update(
         createPostPlayEphemeralPayload(game, playerKey)
