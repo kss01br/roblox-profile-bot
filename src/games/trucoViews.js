@@ -108,7 +108,7 @@ async function loadCardBuffer(card) {
       .toBuffer();
   }
 
-  return sharp(createCardSvg(card.label, "#22d3ee", "ARQUIVO NÃO ENCONTRADO"))
+  return sharp(createCardSvg(card.rank, "#22d3ee", "CARTA"))
     .png()
     .toBuffer();
 }
@@ -192,7 +192,7 @@ function buildPendingTrucoRow(matchId) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`truco_openhand_${matchId}`)
-      .setLabel("Abrir minha mão")
+      .setLabel("Minha mão")
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId(`truco_accepttruco_${matchId}`)
@@ -209,7 +209,7 @@ function buildPublicControlsRow(matchId, disabled = false) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`truco_openhand_${matchId}`)
-      .setLabel("Abrir minha mão")
+      .setLabel("Minha mão")
       .setStyle(ButtonStyle.Primary)
       .setDisabled(disabled),
     new ButtonBuilder()
@@ -246,13 +246,13 @@ function buildPublicGameEmbed(game) {
     .setTitle("🃏 Truco Lunar")
     .setDescription(
       `**${game.players.p1.name}** ${game.score.p1} x ${game.score.p2} **${game.players.p2.name}**\n` +
-        `**Valor da mão:** ${game.roundValue}\n` +
-        `**Vez:** ${game.players[game.currentTurn]?.name || "-"}\n\n` +
-        `**Status:** ${game.actionText}`
+      `**Valor da mão:** ${game.roundValue}\n` +
+      `**Vez:** ${game.players[game.currentTurn]?.name || "-"}\n\n` +
+      `**Status:** ${game.actionText}`
     )
     .setColor(game.status === "finished" ? 0x22c55e : 0x5865f2)
     .setImage("attachment://truco-board.png")
-    .setFooter({ text: "Mão privada em ephemeral. Mesa pública." })
+    .setFooter({ text: "Mão privada em painel ephemeral." })
     .setTimestamp();
 }
 
@@ -278,11 +278,25 @@ function buildPrivateHandEmbed(game, playerKey) {
     .setTitle("🃏 Sua mão")
     .setDescription(
       `**Adversário:** ${game.players[opponentKey].name}\n` +
-        `**Valor da mão:** ${game.roundValue}\n` +
-        `**Status:** ${statusText}`
+      `**Valor da mão:** ${game.roundValue}\n` +
+      `**Status:** ${statusText}`
     )
     .setColor(0x8b5cf6)
     .setImage("attachment://truco-hand.png")
+    .setTimestamp();
+}
+
+function buildPostPlayEmbed(game, playerKey) {
+  const opponentKey = playerKey === "p1" ? "p2" : "p1";
+
+  return new EmbedBuilder()
+    .setTitle("✅ Jogada enviada")
+    .setDescription(
+      `**Adversário:** ${game.players[opponentKey].name}\n` +
+      `**Valor da mão:** ${game.roundValue}\n` +
+      `**Status:** Aguardando a continuação da rodada.`
+    )
+    .setColor(0x22c55e)
     .setTimestamp();
 }
 
@@ -306,8 +320,8 @@ async function createPublicMessagePayload(game) {
       game.status === "finished"
         ? `🏆 Partida finalizada! <@${game.players.p1.id}> vs <@${game.players.p2.id}>`
         : game.status === "playing"
-        ? `✅ Partida aceita! <@${game.creatorId}> vs <@${game.opponentId}>`
-        : `🎮 <@${game.opponentId}>, você foi desafiado para uma partida de truco.`,
+          ? `✅ Partida aceita! <@${game.creatorId}> vs <@${game.opponentId}>`
+          : `🎮 <@${game.opponentId}>, você foi desafiado para uma partida de truco.`,
     embeds: [buildPublicGameEmbed(game)],
     components,
     files: [boardFile],
@@ -335,7 +349,15 @@ async function createPrivateHandPayload(game, playerKey) {
   };
 }
 
+function createPostPlayEphemeralPayload(game, playerKey) {
+  return {
+    embeds: [buildPostPlayEmbed(game, playerKey)],
+    components: [],
+  };
+}
+
 module.exports = {
   createPublicMessagePayload,
   createPrivateHandPayload,
+  createPostPlayEphemeralPayload,
 };
