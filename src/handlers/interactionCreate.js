@@ -116,7 +116,7 @@ module.exports = async (interaction, client) => {
       }
 
       game.status = "playing";
-      game.lastAction = `${interaction.user.username} aceitou a partida. ${game.players[game.currentTurn].name} começa.`;
+      game.actionText = `${interaction.user.username} aceitou a partida. ${game.players[game.currentTurn].name} começa.`;
 
       await interaction.update(await createPublicMessagePayload(game));
       return;
@@ -152,7 +152,7 @@ module.exports = async (interaction, client) => {
       }
 
       game.roundValue = 3;
-      game.lastAction = makeTrucoText(interaction.user.username);
+      game.actionText = makeTrucoText(interaction.user.username);
 
       await interaction.update(await createPublicMessagePayload(game));
       return;
@@ -171,9 +171,9 @@ module.exports = async (interaction, client) => {
       const result = awardHandPoints(game, winnerKey, points);
 
       if (result.finished) {
-        game.lastAction = makeMatchWinText(game.players[winnerKey].name);
+        game.actionText = makeMatchWinText(game.players[winnerKey].name);
       } else {
-        game.lastAction = makeRunText(
+        game.actionText = makeRunText(
           interaction.user.username,
           game.players[winnerKey].name,
           points
@@ -221,24 +221,21 @@ module.exports = async (interaction, client) => {
 
       if (!game.playedCards[opponentKey]) {
         game.currentTurn = opponentKey;
-        game.lastAction = `${interaction.user.username} jogou ${playedCard.label}.`;
+        game.actionText = `${interaction.user.username} jogou ${playedCard.label}.`;
 
         await updatePublicGameMessage(client, game);
 
         return interaction.update(await createPrivateHandPayload(game, playerKey));
       }
 
-      const p1Card = game.playedCards.p1;
-      const p2Card = game.playedCards.p2;
-
-      const { roundWinner, handWinner } = resolveRound(game);
+      const { roundWinner, handWinner, cardP1, cardP2 } = resolveRound(game);
 
       if (roundWinner === "draw") {
-        game.lastAction = makeDrawText(p1Card.label, p2Card.label);
+        game.actionText = makeDrawText(cardP1.label, cardP2.label);
       } else {
-        const winnerCard = roundWinner === "p1" ? p1Card.label : p2Card.label;
-        const loserCard = roundWinner === "p1" ? p2Card.label : p1Card.label;
-        game.lastAction = makeRoundText(game.players[roundWinner].name, winnerCard, loserCard);
+        const winnerCard = roundWinner === "p1" ? cardP1.label : cardP2.label;
+        const loserCard = roundWinner === "p1" ? cardP2.label : cardP1.label;
+        game.actionText = makeRoundText(game.players[roundWinner].name, winnerCard, loserCard);
       }
 
       if (handWinner) {
@@ -246,9 +243,9 @@ module.exports = async (interaction, client) => {
         const result = awardHandPoints(game, handWinner, awardedPoints);
 
         if (result.finished) {
-          game.lastAction = makeMatchWinText(game.players[handWinner].name);
+          game.actionText = makeMatchWinText(game.players[handWinner].name);
         } else {
-          game.lastAction = `${makeHandText(game.players[handWinner].name, awardedPoints)} Nova mão iniciada.`;
+          game.actionText = `${makeHandText(game.players[handWinner].name, awardedPoints)} Nova mão iniciada.`;
         }
       }
 

@@ -24,18 +24,47 @@ function getRankFile(rank) {
   return rank;
 }
 
+function walkFiles(dir) {
+  if (!fs.existsSync(dir)) return [];
+
+  const results = [];
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+
+    if (entry.isDirectory()) {
+      results.push(...walkFiles(full));
+    } else {
+      results.push(full);
+    }
+  }
+
+  return results;
+}
+
+function findCardFileByBaseName(baseName) {
+  const allFiles = walkFiles(CARD_DIR);
+
+  const normalizedBase = baseName.toLowerCase();
+
+  for (const file of allFiles) {
+    const parsed = path.parse(file);
+    if (parsed.name.toLowerCase() === normalizedBase) {
+      return file;
+    }
+  }
+
+  return null;
+}
+
 function getNormalCardPath(card) {
   const suit = suitMap[card.suit];
   const rank = getRankFile(card.rank);
 
-  const candidates = [
-    path.join(CARD_DIR, `card_${suit}_${rank}.png`),
-    path.join(CARD_DIR, `card_${suit}_${rank}.jpg`),
-    path.join(CARD_DIR, `card_${suit}_${rank}.jpeg`),
-    path.join(CARD_DIR, `${`card_${suit}_${rank}`}`),
-  ];
+  if (!suit || !rank) return null;
 
-  return candidates.find((p) => fs.existsSync(p)) || null;
+  return findCardFileByBaseName(`card_${suit}_${rank}`);
 }
 
 function getManilhaColor(rank) {
@@ -49,26 +78,25 @@ function createCardSvg(label, color, subtitle = "") {
   return Buffer.from(`
     <svg width="240" height="340" xmlns="http://www.w3.org/2000/svg">
       <rect x="8" y="8" width="224" height="324" rx="18" fill="#0b1020" stroke="${color}" stroke-width="6"/>
-      <text x="28" y="52" font-size="36" fill="${color}" font-family="Arial" font-weight="bold">${label}</text>
-      <text x="120" y="180" text-anchor="middle" font-size="54" fill="${color}" font-family="Arial" font-weight="bold">${label}</text>
-      <text x="120" y="220" text-anchor="middle" font-size="20" fill="#ffffff" font-family="Arial">${subtitle}</text>
+      <circle cx="120" cy="170" r="52" fill="none" stroke="${color}" stroke-width="6"/>
+      <text x="120" y="178" text-anchor="middle" font-size="32" fill="${color}" font-family="sans-serif" font-weight="bold">${label}</text>
+      <text x="120" y="222" text-anchor="middle" font-size="18" fill="#ffffff" font-family="sans-serif">${subtitle}</text>
     </svg>
   `);
 }
 
-function createBackSvg() {
+function createEmptyBoardSvg() {
   return Buffer.from(`
     <svg width="240" height="340" xmlns="http://www.w3.org/2000/svg">
-      <rect x="8" y="8" width="224" height="324" rx="18" fill="#111827" stroke="#475569" stroke-width="6"/>
-      <rect x="28" y="28" width="184" height="284" rx="14" fill="#0f172a" stroke="#64748b" stroke-width="2"/>
-      <text x="120" y="180" text-anchor="middle" font-size="72" fill="#94a3b8" font-family="Arial" font-weight="bold">?</text>
+      <rect x="8" y="8" width="224" height="324" rx="18" fill="#111827" stroke="#334155" stroke-width="4"/>
+      <text x="120" y="180" text-anchor="middle" font-size="56" fill="#475569" font-family="sans-serif" font-weight="bold">?</text>
     </svg>
   `);
 }
 
 async function loadCardBuffer(card) {
   if (!card) {
-    return sharp(createBackSvg()).png().toBuffer();
+    return sharp(createEmptyBoardSvg()).png().toBuffer();
   }
 
   if (card.type === "manilha") {
@@ -80,10 +108,18 @@ async function loadCardBuffer(card) {
   const normalPath = getNormalCardPath(card);
 
   if (normalPath) {
-    return sharp(normalPath).resize(240, 340, { fit: "contain", background: "#0b1020" }).png().toBuffer();
+    return sharp(normalPath)
+      .resize(240, 340, {
+        fit: "contain",
+        background: "#0b1020",
+      })
+      .png()
+      .toBuffer();
   }
 
-  return sharp(createCardSvg(card.label, "#22d3ee", "CARTA")).png().toBuffer();
+  return sharp(createCardSvg(card.label, "#22d3ee", "ARQUIVO NÃO ENCONTRADO"))
+    .png()
+    .toBuffer();
 }
 
 async function composeCards(buffers, options = {}) {
@@ -167,7 +203,7 @@ function buildGameRow(matchId, disabled = false) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`truco_openhand_${matchId}`)
-      .setLabel("Começar partida")
+      .setLabel("Ver minha mão")
       .setStyle(ButtonStyle.Primary)
       .setDisabled(disabled),
     new ButtonBuilder()
@@ -207,11 +243,11 @@ function buildPublicGameEmbed(game) {
         `**ID:** \`${game.id}\`\n` +
         `**Valor da mão:** ${game.roundValue}\n` +
         `**Vez:** ${game.players[game.currentTurn]?.name || "-"}\n\n` +
-        `**Ação atual:** ${game.lastAction}`
+        `**Ação atual:** ${game.actionText}`
     )
     .setColor(game.status === "finished" ? 0x22c55e : 0x5865f2)
     .setImage("attachment://truco-board.png")
-    .setFooter({ text: "As cartas da mão ficam privadas." })
+    .setFooter({ text: "As mãos ficam privadas. A mesa é pública." })
     .setTimestamp();
 }
 

@@ -71,8 +71,10 @@ function checkHandWinner(roundResults, handStarter) {
 }
 
 function resolveRound(game) {
-  const result = compareCards(game.playedCards.p1, game.playedCards.p2);
+  const cardP1 = game.playedCards.p1;
+  const cardP2 = game.playedCards.p2;
 
+  const result = compareCards(cardP1, cardP2);
   game.roundResults.push(result);
 
   const handWinner = checkHandWinner(game.roundResults, game.handStarter);
@@ -92,6 +94,8 @@ function resolveRound(game) {
   return {
     roundWinner: result,
     handWinner,
+    cardP1,
+    cardP2,
   };
 }
 
@@ -140,20 +144,11 @@ function awardHandPoints(game, winnerKey, points) {
   };
 }
 
-function makePlayText(playerName, cardLabel) {
-  return pickRandom([
-    `${playerName} jogou ${cardLabel}.`,
-    `${playerName} colocou ${cardLabel} na mesa.`,
-    `${playerName} respondeu com ${cardLabel}.`,
-    `${playerName} mandou ${cardLabel}.`,
-  ]);
-}
-
 function makeRoundText(winnerName, winnerCard, loserCard) {
   return pickRandom([
     `${winnerName} venceu a rodada com ${winnerCard} contra ${loserCard}.`,
     `A carta maior falou mais alto: ${winnerCard} de ${winnerName}.`,
-    `${winnerName} levou a rodada. ${winnerCard} passou por cima de ${loserCard}.`,
+    `${winnerName} levou a rodada com ${winnerCard}.`,
     `${winnerName} não deixou barato: ${winnerCard} venceu ${loserCard}.`,
   ]);
 }
@@ -162,7 +157,7 @@ function makeDrawText(cardA, cardB) {
   return pickRandom([
     `Rodada empatada: ${cardA} contra ${cardB}.`,
     `Ninguém levou essa. ${cardA} e ${cardB} ficaram iguais.`,
-    `Empate na rodada. ${cardA} bateu de frente com ${cardB}.`,
+    `Empate na rodada entre ${cardA} e ${cardB}.`,
   ]);
 }
 
@@ -204,7 +199,6 @@ module.exports = {
   resolveRound,
   startNewHand,
   awardHandPoints,
-  makePlayText,
   makeRoundText,
   makeDrawText,
   makeHandText,
