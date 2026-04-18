@@ -108,7 +108,7 @@ async function loadCardBuffer(card) {
       .toBuffer();
   }
 
-  return sharp(createCardSvg(card.rank, "#22d3ee", "CARTA"))
+  return sharp(createCardSvg(card.rank || "?", "#22d3ee", "CARTA"))
     .png()
     .toBuffer();
 }

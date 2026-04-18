@@ -20,6 +20,12 @@ const {
   createPostPlayEphemeralPayload,
 } = require("../games/trucoViews");
 
+console.log("trucoViews import:", {
+  createPublicMessagePayload: typeof createPublicMessagePayload,
+  createPrivateHandPayload: typeof createPrivateHandPayload,
+  createPostPlayEphemeralPayload: typeof createPostPlayEphemeralPayload,
+});
+
 async function resendPublicGameMessage(client, game) {
   const channel = await client.channels.fetch(game.channelId);
   if (!channel) return;
