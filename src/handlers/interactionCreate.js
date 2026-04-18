@@ -43,7 +43,6 @@ function buildGameRow(matchId) {
 }
 
 module.exports = async (interaction, client) => {
-  // Slash commands
   if (interaction.isChatInputCommand()) {
     const command = client.commands.get(interaction.commandName);
 
@@ -76,7 +75,6 @@ module.exports = async (interaction, client) => {
     return;
   }
 
-  // Botões
   if (interaction.isButton()) {
     try {
       const customId = interaction.customId;
@@ -139,6 +137,13 @@ module.exports = async (interaction, client) => {
       }
 
       if (action === "viewhand") {
+        if (game.status !== "playing") {
+          return interaction.reply({
+            content: "❌ Você só pode ver sua mão depois que a partida for aceita.",
+            flags: 64,
+          });
+        }
+
         const opponentKey = playerKey === "p1" ? "p2" : "p1";
 
         return interaction.reply({
@@ -160,8 +165,7 @@ module.exports = async (interaction, client) => {
         }
 
         return interaction.reply({
-          content: `🗣️ ${interaction.user.username} pediu TRUCO!`,
-          flags: 64,
+          content: `🗣️ **${interaction.user.username} pediu TRUCO!**`,
         });
       }
 
@@ -174,8 +178,7 @@ module.exports = async (interaction, client) => {
         }
 
         return interaction.reply({
-          content: `🏳️ ${interaction.user.username} correu da mão.`,
-          flags: 64,
+          content: `🏳️ **${interaction.user.username} correu da mão.**`,
         });
       }
     } catch (error) {

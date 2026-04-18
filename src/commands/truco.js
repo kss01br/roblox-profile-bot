@@ -13,8 +13,6 @@ const {
 const {
   createMatchId,
   setGame,
-  getGame,
-  findPlayerKey,
   formatHand,
 } = require("../games/trucoManager");
 
@@ -31,7 +29,7 @@ function buildPublicGameEmbed(game, creatorId, opponentId) {
         `**Vez:** ${game.players[game.currentTurn].name}`
     )
     .setColor(0x5865f2)
-    .setFooter({ text: "Cada jogador vê a própria mão no privado." })
+    .setFooter({ text: "As cartas ficam ocultas. Só as ações aparecem para todos." })
     .setTimestamp();
 }
 
@@ -40,11 +38,7 @@ function buildAcceptRow(matchId) {
     new ButtonBuilder()
       .setCustomId(`truco_accept_${matchId}`)
       .setLabel("Aceitar partida")
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId(`truco_viewhand_${matchId}`)
-      .setLabel("Ver minha mão")
-      .setStyle(ButtonStyle.Primary)
+      .setStyle(ButtonStyle.Success)
   );
 }
 
