@@ -5,6 +5,14 @@ const {
   formatNumber,
 } = require("../utils/xpManager");
 
+function makeProgressBar(percent, size = 12) {
+  const clamped = Math.max(0, Math.min(100, percent));
+  const filled = Math.round((clamped / 100) * size);
+  const empty = size - filled;
+
+  return `▰`.repeat(filled) + `▱`.repeat(empty);
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("rank")
@@ -18,69 +26,78 @@ module.exports = {
 
   async execute(interaction) {
     try {
-      await interaction.deferReply({ flags: 64 });
-
       const targetUser =
         interaction.options.getUser("usuario") || interaction.user;
 
       const stats = getUserXp(interaction.guildId, targetUser.id);
       const progress = getRankProgress(stats.xp);
 
+      const avatar = targetUser.displayAvatarURL({
+        extension: "png",
+        size: 256,
+      });
+
+      const progressBar = makeProgressBar(progress.progressPercent);
+
       const embed = new EmbedBuilder()
-        .setTitle("🌌 Perfil Lunar")
-        .setDescription(`**Usuário:** ${targetUser}`)
+        .setColor(0x7c3aed)
+        .setAuthor({
+          name: `Perfil Lunar • ${targetUser.username}`,
+          iconURL: avatar,
+        })
+        .setThumbnail(avatar)
+        .setDescription(
+          [
+            `🌠 **Patente atual:** ${progress.currentRank.name}`,
+            `✨ **XP total:** ${formatNumber(stats.xp)}`,
+          ].join("\n")
+        )
         .addFields(
           {
-            name: "XP total",
-            value: formatNumber(stats.xp),
-            inline: true,
-          },
-          {
-            name: "Patente atual",
-            value: progress.currentRank.name,
-            inline: true,
-          }
-        )
-        .setColor(0x5865f2)
-        .setTimestamp();
-
-      if (progress.nextRank) {
-        embed.addFields(
-          {
-            name: "Próxima patente",
-            value: progress.nextRank.name,
+            name: "📈 Progresso",
+            value: `${progressBar}\n**${progress.progressPercent.toFixed(1)}%**`,
             inline: false,
           },
           {
-            name: "Falta",
-            value: `${formatNumber(progress.remainingXp)} XP`,
+            name: "🚀 Próxima patente",
+            value: progress.nextRank ? progress.nextRank.name : "Patente máxima",
             inline: true,
           },
           {
-            name: "Progresso",
-            value: `${progress.progressPercent.toFixed(1)}%`,
+            name: "📦 Falta",
+            value: progress.nextRank
+              ? `${formatNumber(progress.remainingXp)} XP`
+              : "0 XP",
+            inline: true,
+          },
+          {
+            name: "💬 Mensagens",
+            value: formatNumber(stats.messages || 0),
+            inline: true,
+          },
+          {
+            name: "🎧 Tempo em call",
+            value: `${formatNumber(stats.voiceMinutes || 0)} min`,
             inline: true,
           }
-        );
-      } else {
-        embed.addFields({
-          name: "Status",
-          value: "🌠 Patente máxima alcançada",
-          inline: false,
-        });
-      }
+        )
+        .setFooter({
+          text: "Sistema Lunar XP",
+        })
+        .setTimestamp();
 
-      await interaction.editReply({
+      await interaction.reply({
         embeds: [embed],
+        flags: 64,
       });
     } catch (error) {
       console.error("Erro ao executar o comando rank:", error);
 
-      if (interaction.deferred || interaction.replied) {
+      if (interaction.replied || interaction.deferred) {
         await interaction
-          .editReply({
+          .followUp({
             content: "❌ Ocorreu um erro ao mostrar o perfil lunar.",
-            embeds: [],
+            flags: 64,
           })
           .catch(() => {});
       } else {

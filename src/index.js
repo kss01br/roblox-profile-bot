@@ -45,7 +45,7 @@ async function handleMessageXp(message) {
   if (content.startsWith("/")) return;
 
   const now = Date.now();
-  const cooldownTime = 10 * 1000;
+  const cooldownTime = 20 * 1000;
   const lastXpTime = xpCooldown.get(message.author.id) || 0;
 
   if (now - lastXpTime < cooldownTime) return;
@@ -53,7 +53,7 @@ async function handleMessageXp(message) {
   xpCooldown.set(message.author.id, now);
 
   const xpData = readXpData();
-  const gainedXp = Math.floor(Math.random() * 11) + 5; // 5 a 15 XP
+  const gainedXp = Math.floor(Math.random() * 5) + 6; // 6 a 10 XP
 
   const currentEntry = xpData[message.author.id];
 
@@ -73,7 +73,7 @@ async function handleMessageXp(message) {
       : xpData[message.author.id].xp || 0;
 
   console.log(
-    `✅ ${message.author.tag} ganhou ${gainedXp} XP. Total: ${totalXp}`
+    `✅ ${message.author.tag} ganhou ${gainedXp} XP por mensagem. Total: ${totalXp}`
   );
 }
 

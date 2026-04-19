@@ -33,6 +33,7 @@ function startVoiceXpLoop(client) {
   setInterval(() => {
     try {
       const xpData = readXpData();
+      const voiceXpGain = 2;
 
       for (const guild of client.guilds.cache.values()) {
         for (const voiceChannel of guild.channels.cache.values()) {
@@ -47,12 +48,21 @@ function startVoiceXpLoop(client) {
             const currentEntry = xpData[memberId];
 
             if (typeof currentEntry === "number") {
-              xpData[memberId] = currentEntry + 1;
+              xpData[memberId] = currentEntry + voiceXpGain;
             } else if (currentEntry && typeof currentEntry === "object") {
-              xpData[memberId].xp = (currentEntry.xp || 0) + 1;
+              xpData[memberId].xp = (currentEntry.xp || 0) + voiceXpGain;
             } else {
-              xpData[memberId] = 1;
+              xpData[memberId] = voiceXpGain;
             }
+
+            const totalXp =
+              typeof xpData[memberId] === "number"
+                ? xpData[memberId]
+                : xpData[memberId].xp || 0;
+
+            console.log(
+              `🎧 ${member.user.tag} ganhou ${voiceXpGain} XP por voz. Total: ${totalXp}`
+            );
           }
         }
       }
