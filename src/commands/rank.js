@@ -56,7 +56,7 @@ module.exports = {
         .setThumbnail(avatar)
         .setDescription(
           [
-            `🌠 **Patente atual:** ${progress.currentRank.name}`,
+            `🚀 **Patente atual:** ${progress.currentRank.name}`,
             `✨ **XP total:** ${formatNumber(stats.xp)}`,
             `🏆 **Posição geral:** ${
               userPosition > 0 ? `#${formatNumber(userPosition)}` : "Não ranqueado"
@@ -79,6 +79,16 @@ module.exports = {
             value: progress.nextRank
               ? `${formatNumber(progress.remainingXp)} XP`
               : "0 XP",
+            inline: true,
+          },
+          {
+            name: "💬 Mensagens",
+            value: formatNumber(stats.messages || 0),
+            inline: true,
+          },
+          {
+            name: "🎧 Tempo em call",
+            value: `${formatNumber(stats.voiceMinutes || 0)} min`,
             inline: true,
           }
         )

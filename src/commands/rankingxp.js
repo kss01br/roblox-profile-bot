@@ -95,7 +95,7 @@ module.exports = {
         });
       }
 
-      const fullRankingRaw = entries
+      const rankingRaw = entries
         .map(([userId, data]) => ({
           userId,
           xp: getUserXp(data),
@@ -103,20 +103,20 @@ module.exports = {
         .filter((user) => user.xp > 0)
         .sort((a, b) => b.xp - a.xp);
 
-      if (!fullRankingRaw.length) {
+      if (!rankingRaw.length) {
         return await interaction.editReply({
           content: "Ainda não tem ninguém com XP para mostrar no ranking.",
         });
       }
 
-      const fullRankingWithInfo = [];
+      const rankingWithInfo = [];
 
-      for (const user of fullRankingRaw) {
+      for (const user of rankingRaw) {
         const info = await resolveUserInfo(interaction, user.userId);
 
         if (info.isBot) continue;
 
-        fullRankingWithInfo.push({
+        rankingWithInfo.push({
           ...user,
           name: info.name,
           avatar: info.avatar,
@@ -124,55 +124,15 @@ module.exports = {
         });
       }
 
-      if (!fullRankingWithInfo.length) {
+      if (!rankingWithInfo.length) {
         return await interaction.editReply({
           content: "Ainda não tem ninguém com XP para mostrar no ranking.",
         });
       }
 
-      const callerPosition =
-        fullRankingWithInfo.findIndex(
-          (user) => user.userId === interaction.user.id
-        ) + 1;
-
-      const top10 = fullRankingWithInfo.slice(0, 10);
+      const top10 = rankingWithInfo.slice(0, 10);
       const top3 = top10.slice(0, 3);
-
-      const rankingLines = top10.map((user, index) => {
-        const medalhas = ["🥇", "🥈", "🥉"];
-        const posicao = medalhas[index] || `\`${index + 1}.\``;
-
-        return `${posicao} **${user.name}**\n┗ ✨ ${formatNumber(
-          user.xp
-        )} XP • 🌠 ${user.rank.name}`;
-      });
-
-      const mainEmbed = new EmbedBuilder()
-        .setColor(0x7c3aed)
-        .setTitle("🏆 Ranking Lunar de XP")
-        .setDescription(rankingLines.join("\n\n"))
-        .setThumbnail(
-          interaction.guild?.iconURL({
-            extension: "png",
-            size: 256,
-          }) || null
-        )
-        .addFields({
-          name: "📍 Sua posição",
-          value:
-            callerPosition > 0
-              ? `#${formatNumber(callerPosition)} • ${formatNumber(
-                  fullRankingWithInfo[callerPosition - 1].xp
-                )} XP`
-              : "Você ainda não entrou no ranking.",
-          inline: false,
-        })
-        .setFooter({
-          text: `${interaction.guild?.name || "Servidor"} • ${formatNumber(
-            fullRankingWithInfo.length
-          )} jogadores ranqueados`,
-        })
-        .setTimestamp();
+      const rest = top10.slice(3);
 
       const podiumEmbeds = top3.map((user, index) => {
         const style = getPodiumStyle(index);
@@ -201,8 +161,30 @@ module.exports = {
         return embed;
       });
 
+      const embeds = [...podiumEmbeds];
+
+      if (rest.length > 0) {
+        const restLines = rest.map((user, index) => {
+          const realPosition = index + 4;
+          return `\`${realPosition}.\` **${user.name}** — ${formatNumber(
+            user.xp
+          )} XP • ${user.rank.name}`;
+        });
+
+        const restEmbed = new EmbedBuilder()
+          .setColor(0x7c3aed)
+          .setTitle("🏆 Ranking Lunar de XP")
+          .setDescription(restLines.join("\n"))
+          .setFooter({
+            text: `Top ${formatNumber(top10.length)}`,
+          })
+          .setTimestamp();
+
+        embeds.push(restEmbed);
+      }
+
       await interaction.editReply({
-        embeds: [...podiumEmbeds, mainEmbed],
+        embeds,
       });
     } catch (error) {
       console.error("Erro no comando /rankingxp:", error);
