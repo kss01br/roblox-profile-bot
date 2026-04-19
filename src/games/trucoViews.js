@@ -61,6 +61,11 @@ function getNormalCardPath(card) {
   return findCardFileByBaseName(`card_${suit}_${rank}`);
 }
 
+function getManilhaCardPath(card) {
+  if (!card?.rank) return null;
+  return findCardFileByBaseName(`card_manilha_${card.rank}`);
+}
+
 function getManilhaColor(rank) {
   if (rank === "M1") return "#94a3b8";
   if (rank === "M2") return "#f97316";
@@ -94,6 +99,15 @@ async function loadCardBuffer(card) {
   }
 
   if (card.type === "manilha") {
+    const manilhaPath = getManilhaCardPath(card);
+
+    if (manilhaPath) {
+      return sharp(manilhaPath)
+        .resize(240, 340, { fit: "contain", background: "#0b1020" })
+        .png()
+        .toBuffer();
+    }
+
     return sharp(createCardSvg(card.rank, getManilhaColor(card.rank), "MANILHA"))
       .png()
       .toBuffer();
