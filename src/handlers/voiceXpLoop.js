@@ -27,6 +27,33 @@ function writeXpData(data) {
   fs.writeFileSync(xpFilePath, JSON.stringify(data, null, 2), "utf8");
 }
 
+function normalizeUserEntry(entry) {
+  if (typeof entry === "number") {
+    return {
+      xp: entry,
+      messages: 0,
+      voiceMinutes: 0,
+      updatedAt: null,
+    };
+  }
+
+  if (entry && typeof entry === "object") {
+    return {
+      xp: entry.xp || 0,
+      messages: entry.messages || 0,
+      voiceMinutes: entry.voiceMinutes || 0,
+      updatedAt: entry.updatedAt || null,
+    };
+  }
+
+  return {
+    xp: 0,
+    messages: 0,
+    voiceMinutes: 0,
+    updatedAt: null,
+  };
+}
+
 function startVoiceXpLoop(client) {
   console.log("🎧 Voice XP loop iniciado");
 
@@ -45,23 +72,16 @@ function startVoiceXpLoop(client) {
             const voice = member.voice;
             if (!voice || voice.selfMute || voice.serverMute) continue;
 
-            const currentEntry = xpData[memberId];
+            const currentEntry = normalizeUserEntry(xpData[memberId]);
 
-            if (typeof currentEntry === "number") {
-              xpData[memberId] = currentEntry + voiceXpGain;
-            } else if (currentEntry && typeof currentEntry === "object") {
-              xpData[memberId].xp = (currentEntry.xp || 0) + voiceXpGain;
-            } else {
-              xpData[memberId] = voiceXpGain;
-            }
+            currentEntry.xp += voiceXpGain;
+            currentEntry.voiceMinutes += 1;
+            currentEntry.updatedAt = Date.now();
 
-            const totalXp =
-              typeof xpData[memberId] === "number"
-                ? xpData[memberId]
-                : xpData[memberId].xp || 0;
+            xpData[memberId] = currentEntry;
 
             console.log(
-              `🎧 ${member.user.tag} ganhou ${voiceXpGain} XP por voz. Total: ${totalXp}`
+              `🎧 ${member.user.tag} ganhou ${voiceXpGain} XP por voz. Total: ${currentEntry.xp} | Call: ${currentEntry.voiceMinutes} min`
             );
           }
         }

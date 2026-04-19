@@ -2,6 +2,7 @@ const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const {
   getUserXp,
   getRankProgress,
+  getGuildRanking,
   formatNumber,
 } = require("../utils/xpManager");
 
@@ -10,7 +11,7 @@ function makeProgressBar(percent, size = 12) {
   const filled = Math.round((clamped / 100) * size);
   const empty = size - filled;
 
-  return `▰`.repeat(filled) + `▱`.repeat(empty);
+  return "▰".repeat(filled) + "▱".repeat(empty);
 }
 
 module.exports = {
@@ -32,6 +33,13 @@ module.exports = {
       const stats = getUserXp(interaction.guildId, targetUser.id);
       const progress = getRankProgress(stats.xp);
 
+      const fullRanking = getGuildRanking(interaction.guildId, 999999).filter(
+        (user) => (user.xp || 0) > 0
+      );
+
+      const userPosition =
+        fullRanking.findIndex((user) => user.userId === targetUser.id) + 1;
+
       const avatar = targetUser.displayAvatarURL({
         extension: "png",
         size: 256,
@@ -50,6 +58,9 @@ module.exports = {
           [
             `🌠 **Patente atual:** ${progress.currentRank.name}`,
             `✨ **XP total:** ${formatNumber(stats.xp)}`,
+            `🏆 **Posição geral:** ${
+              userPosition > 0 ? `#${formatNumber(userPosition)}` : "Não ranqueado"
+            }`,
           ].join("\n")
         )
         .addFields(
@@ -69,16 +80,6 @@ module.exports = {
               ? `${formatNumber(progress.remainingXp)} XP`
               : "0 XP",
             inline: true,
-          },
-          {
-            name: "💬 Mensagens",
-            value: formatNumber(stats.messages || 0),
-            inline: true,
-          },
-          {
-            name: "🎧 Tempo em call",
-            value: `${formatNumber(stats.voiceMinutes || 0)} min`,
-            inline: true,
           }
         )
         .setFooter({
@@ -88,7 +89,6 @@ module.exports = {
 
       await interaction.reply({
         embeds: [embed],
-        flags: 64,
       });
     } catch (error) {
       console.error("Erro ao executar o comando rank:", error);
@@ -97,14 +97,12 @@ module.exports = {
         await interaction
           .followUp({
             content: "❌ Ocorreu um erro ao mostrar o perfil lunar.",
-            flags: 64,
           })
           .catch(() => {});
       } else {
         await interaction
           .reply({
             content: "❌ Ocorreu um erro ao mostrar o perfil lunar.",
-            flags: 64,
           })
           .catch(() => {});
       }

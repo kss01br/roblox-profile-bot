@@ -35,6 +35,33 @@ function writeXpData(data) {
   fs.writeFileSync(xpFilePath, JSON.stringify(data, null, 2), "utf8");
 }
 
+function normalizeUserEntry(entry) {
+  if (typeof entry === "number") {
+    return {
+      xp: entry,
+      messages: 0,
+      voiceMinutes: 0,
+      updatedAt: null,
+    };
+  }
+
+  if (entry && typeof entry === "object") {
+    return {
+      xp: entry.xp || 0,
+      messages: entry.messages || 0,
+      voiceMinutes: entry.voiceMinutes || 0,
+      updatedAt: entry.updatedAt || null,
+    };
+  }
+
+  return {
+    xp: 0,
+    messages: 0,
+    voiceMinutes: 0,
+    updatedAt: null,
+  };
+}
+
 async function handleMessageXp(message) {
   if (!message.guild) return;
   if (message.author.bot) return;
@@ -55,25 +82,17 @@ async function handleMessageXp(message) {
   const xpData = readXpData();
   const gainedXp = Math.floor(Math.random() * 5) + 6; // 6 a 10 XP
 
-  const currentEntry = xpData[message.author.id];
+  const currentEntry = normalizeUserEntry(xpData[message.author.id]);
 
-  if (typeof currentEntry === "number") {
-    xpData[message.author.id] = currentEntry + gainedXp;
-  } else if (currentEntry && typeof currentEntry === "object") {
-    xpData[message.author.id].xp = (currentEntry.xp || 0) + gainedXp;
-  } else {
-    xpData[message.author.id] = gainedXp;
-  }
+  currentEntry.xp += gainedXp;
+  currentEntry.messages += 1;
+  currentEntry.updatedAt = Date.now();
 
+  xpData[message.author.id] = currentEntry;
   writeXpData(xpData);
 
-  const totalXp =
-    typeof xpData[message.author.id] === "number"
-      ? xpData[message.author.id]
-      : xpData[message.author.id].xp || 0;
-
   console.log(
-    `✅ ${message.author.tag} ganhou ${gainedXp} XP por mensagem. Total: ${totalXp}`
+    `✅ ${message.author.tag} ganhou ${gainedXp} XP por mensagem. Total: ${currentEntry.xp} | Mensagens: ${currentEntry.messages}`
   );
 }
 
@@ -139,14 +158,12 @@ client.on("interactionCreate", async (interaction) => {
         await interaction
           .followUp({
             content: "❌ Ocorreu um erro ao processar este comando.",
-            flags: 64,
           })
           .catch(() => {});
       } else {
         await interaction
           .reply({
             content: "❌ Ocorreu um erro ao processar este comando.",
-            flags: 64,
           })
           .catch(() => {});
       }
