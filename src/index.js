@@ -5,12 +5,14 @@ const { DISCORD_TOKEN } = require("./config/env");
 const readyHandler = require("./handlers/ready");
 const interactionCreateHandler = require("./handlers/interactionCreate");
 const messageCreateHandler = require("./handlers/messageCreate");
+const startVoiceXpLoop = require("./handlers/voiceXpLoop");
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildVoiceStates,
   ],
 });
 
@@ -45,6 +47,7 @@ for (const file of commandFiles) {
 client.once("clientReady", async () => {
   try {
     await readyHandler(client);
+    startVoiceXpLoop(client);
   } catch (error) {
     console.error("Erro no readyHandler:");
     console.error(error);
