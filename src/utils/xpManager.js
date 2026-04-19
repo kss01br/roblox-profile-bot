@@ -5,7 +5,7 @@ const lunarRanks = require("../data/lunarRanks");
 const dataDir = path.join(__dirname, "..", "data");
 const xpFilePath = path.join(dataDir, "xp.json");
 
-const cooldowns = new Map();
+const textCooldowns = new Map();
 
 function ensureXpFile() {
   if (!fs.existsSync(dataDir)) {
@@ -37,14 +37,24 @@ function ensureUser(data, guildId, userId) {
     data[guildId][userId] = {
       xp: 0,
       messages: 0,
+      voiceMinutes: 0,
       updatedAt: Date.now(),
     };
   }
 }
 
-function getRandomXpGain() {
-  const min = Number(process.env.XP_MIN_GAIN || 15);
-  const max = Number(process.env.XP_MAX_GAIN || 25);
+function formatNumber(value) {
+  return new Intl.NumberFormat("pt-BR").format(value || 0);
+}
+
+function getTextCooldownSeconds() {
+  const seconds = Number(process.env.XP_TEXT_COOLDOWN_SECONDS || 30);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : 30;
+}
+
+function getRandomTextXp() {
+  const min = Number(process.env.XP_TEXT_MIN_GAIN || 15);
+  const max = Number(process.env.XP_TEXT_MAX_GAIN || 25);
 
   const safeMin = Number.isFinite(min) ? min : 15;
   const safeMax = Number.isFinite(max) ? max : 25;
@@ -55,53 +65,73 @@ function getRandomXpGain() {
   return Math.floor(Math.random() * (high - low + 1)) + low;
 }
 
-function getCooldownSeconds() {
-  const seconds = Number(process.env.XP_COOLDOWN_SECONDS || 30);
-  return Number.isFinite(seconds) && seconds > 0 ? seconds : 30;
+function getVoiceXpPerMinute() {
+  const value = Number(process.env.XP_VOICE_PER_MINUTE || 10);
+  return Number.isFinite(value) && value > 0 ? value : 10;
 }
 
-function canGainXp(guildId, userId) {
-  const cooldownMs = getCooldownSeconds() * 1000;
-  const key = `${guildId}:${userId}`;
-  const last = cooldowns.get(key);
+function getTextCooldownKey(guildId, userId) {
+  return `${guildId}:${userId}`;
+}
+
+function canGainTextXp(guildId, userId) {
+  const key = getTextCooldownKey(guildId, userId);
+  const last = textCooldowns.get(key);
 
   if (!last) return true;
-  return Date.now() - last >= cooldownMs;
+
+  return Date.now() - last >= getTextCooldownSeconds() * 1000;
 }
 
-function markCooldown(guildId, userId) {
-  const key = `${guildId}:${userId}`;
-  cooldowns.set(key, Date.now());
+function markTextCooldown(guildId, userId) {
+  const key = getTextCooldownKey(guildId, userId);
+  textCooldowns.set(key, Date.now());
 }
 
-function addXp(guildId, userId, amount) {
+function addXp(guildId, userId, amount, meta = {}) {
   const data = readXpData();
 
   ensureUser(data, guildId, userId);
 
   data[guildId][userId].xp += amount;
-  data[guildId][userId].messages += 1;
   data[guildId][userId].updatedAt = Date.now();
+
+  if (meta.messageIncrement) {
+    data[guildId][userId].messages += meta.messageIncrement;
+  }
+
+  if (meta.voiceMinutesIncrement) {
+    data[guildId][userId].voiceMinutes += meta.voiceMinutesIncrement;
+  }
 
   writeXpData(data);
 
   return data[guildId][userId];
 }
 
-function awardMessageXp(guildId, userId) {
-  if (!canGainXp(guildId, userId)) {
+function awardTextXp(guildId, userId) {
+  if (!canGainTextXp(guildId, userId)) {
     return null;
   }
 
-  const xpGain = getRandomXpGain();
-  const userData = addXp(guildId, userId, xpGain);
+  const xpGain = getRandomTextXp();
+  const userData = addXp(guildId, userId, xpGain, { messageIncrement: 1 });
 
-  markCooldown(guildId, userId);
+  markTextCooldown(guildId, userId);
 
   return {
     xpGain,
     userData,
   };
+}
+
+function awardVoiceXp(guildId, userId, minutes = 1) {
+  const xpPerMinute = getVoiceXpPerMinute();
+  const amount = xpPerMinute * minutes;
+
+  return addXp(guildId, userId, amount, {
+    voiceMinutesIncrement: minutes,
+  });
 }
 
 function getUserXp(guildId, userId) {
@@ -111,6 +141,7 @@ function getUserXp(guildId, userId) {
     return {
       xp: 0,
       messages: 0,
+      voiceMinutes: 0,
       updatedAt: null,
     };
   }
@@ -151,25 +182,20 @@ function getRankProgress(xp) {
       currentRank,
       nextRank: null,
       progressPercent: 100,
-      currentBaseXp: currentRank.minXp,
-      nextBaseXp: currentRank.minXp,
       remainingXp: 0,
     };
   }
 
-  const currentBaseXp = currentRank.minXp;
-  const nextBaseXp = nextRank.minXp;
-  const range = nextBaseXp - currentBaseXp;
-  const progressed = xp - currentBaseXp;
-  const progressPercent = range > 0 ? Math.max(0, Math.min(100, (progressed / range) * 100)) : 100;
+  const span = nextRank.minXp - currentRank.minXp;
+  const progressed = xp - currentRank.minXp;
+  const progressPercent =
+    span > 0 ? Math.max(0, Math.min(100, (progressed / span) * 100)) : 100;
 
   return {
     currentRank,
     nextRank,
     progressPercent,
-    currentBaseXp,
-    nextBaseXp,
-    remainingXp: nextBaseXp - xp,
+    remainingXp: nextRank.minXp - xp,
   };
 }
 
@@ -181,20 +207,15 @@ function getGuildRanking(guildId, limit = 10) {
     .map(([userId, stats]) => ({
       userId,
       xp: stats.xp || 0,
-      messages: stats.messages || 0,
-      updatedAt: stats.updatedAt || null,
       rank: getCurrentRank(stats.xp || 0),
     }))
     .sort((a, b) => b.xp - a.xp)
     .slice(0, limit);
 }
 
-function formatNumber(value) {
-  return new Intl.NumberFormat("pt-BR").format(value || 0);
-}
-
 module.exports = {
-  awardMessageXp,
+  awardTextXp,
+  awardVoiceXp,
   getUserXp,
   getCurrentRank,
   getNextRank,
