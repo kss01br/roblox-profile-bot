@@ -4,9 +4,14 @@ const { Client, GatewayIntentBits, Collection } = require("discord.js");
 const { DISCORD_TOKEN } = require("./config/env");
 const readyHandler = require("./handlers/ready");
 const interactionCreateHandler = require("./handlers/interactionCreate");
+const messageCreateHandler = require("./handlers/messageCreate");
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
 });
 
 client.commands = new Collection();
@@ -75,6 +80,15 @@ client.on("interactionCreate", async (interaction) => {
       console.error("Falha ao responder erro global:");
       console.error(replyError);
     }
+  }
+});
+
+client.on("messageCreate", async (message) => {
+  try {
+    await messageCreateHandler(message);
+  } catch (error) {
+    console.error("Erro no messageCreateHandler:");
+    console.error(error);
   }
 });
 
