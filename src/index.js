@@ -7,6 +7,76 @@ const interactionCreateHandler = require("./handlers/interactionCreate");
 const messageCreateHandler = require("./handlers/messageCreate");
 const startVoiceXpLoop = require("./handlers/voiceXpLoop");
 
+const xpFilePath = path.join(__dirname, "data", "xp.json");
+const xpCooldown = new Map();
+
+function ensureXpFileExists() {
+  if (!fs.existsSync(xpFilePath)) {
+    fs.mkdirSync(path.dirname(xpFilePath), { recursive: true });
+    fs.writeFileSync(xpFilePath, "{}", "utf8");
+  }
+}
+
+function readXpData() {
+  ensureXpFileExists();
+
+  try {
+    const raw = fs.readFileSync(xpFilePath, "utf8");
+    return JSON.parse(raw || "{}");
+  } catch (error) {
+    console.error("Erro ao ler xp.json:");
+    console.error(error);
+    return {};
+  }
+}
+
+function writeXpData(data) {
+  ensureXpFileExists();
+  fs.writeFileSync(xpFilePath, JSON.stringify(data, null, 2), "utf8");
+}
+
+async function handleMessageXp(message) {
+  if (!message.guild) return;
+  if (message.author.bot) return;
+
+  const content = (message.content || "").trim();
+
+  if (!content) return;
+  if (content.startsWith("/")) return;
+
+  const now = Date.now();
+  const cooldownTime = 10 * 1000;
+  const lastXpTime = xpCooldown.get(message.author.id) || 0;
+
+  if (now - lastXpTime < cooldownTime) return;
+
+  xpCooldown.set(message.author.id, now);
+
+  const xpData = readXpData();
+  const gainedXp = Math.floor(Math.random() * 11) + 5; // 5 a 15 XP
+
+  const currentEntry = xpData[message.author.id];
+
+  if (typeof currentEntry === "number") {
+    xpData[message.author.id] = currentEntry + gainedXp;
+  } else if (currentEntry && typeof currentEntry === "object") {
+    xpData[message.author.id].xp = (currentEntry.xp || 0) + gainedXp;
+  } else {
+    xpData[message.author.id] = gainedXp;
+  }
+
+  writeXpData(xpData);
+
+  const totalXp =
+    typeof xpData[message.author.id] === "number"
+      ? xpData[message.author.id]
+      : xpData[message.author.id].xp || 0;
+
+  console.log(
+    `✅ ${message.author.tag} ganhou ${gainedXp} XP. Total: ${totalXp}`
+  );
+}
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -46,6 +116,7 @@ for (const file of commandFiles) {
 
 client.once("clientReady", async () => {
   try {
+    ensureXpFileExists();
     await readyHandler(client);
     startVoiceXpLoop(client);
   } catch (error) {
@@ -87,6 +158,13 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 client.on("messageCreate", async (message) => {
+  try {
+    await handleMessageXp(message);
+  } catch (error) {
+    console.error("Erro no handleMessageXp:");
+    console.error(error);
+  }
+
   try {
     await messageCreateHandler(message);
   } catch (error) {

@@ -17,57 +17,80 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    const targetUser = interaction.options.getUser("usuario") || interaction.user;
-    const stats = getUserXp(interaction.guildId, targetUser.id);
-    const progress = getRankProgress(stats.xp);
+    try {
+      await interaction.deferReply({ flags: 64 });
 
-    const embed = new EmbedBuilder()
-      .setTitle("🌌 Perfil Lunar")
-      .setDescription(`**Usuário:** ${targetUser}`)
-      .addFields(
-        {
-          name: "XP total",
-          value: formatNumber(stats.xp),
-          inline: true,
-        },
-        {
-          name: "Patente atual",
-          value: progress.currentRank.name,
-          inline: true,
-        }
-      )
-      .setColor(0x5865f2)
-      .setTimestamp();
+      const targetUser =
+        interaction.options.getUser("usuario") || interaction.user;
 
-    if (progress.nextRank) {
-      embed.addFields(
-        {
-          name: "Próxima patente",
-          value: progress.nextRank.name,
+      const stats = getUserXp(interaction.guildId, targetUser.id);
+      const progress = getRankProgress(stats.xp);
+
+      const embed = new EmbedBuilder()
+        .setTitle("🌌 Perfil Lunar")
+        .setDescription(`**Usuário:** ${targetUser}`)
+        .addFields(
+          {
+            name: "XP total",
+            value: formatNumber(stats.xp),
+            inline: true,
+          },
+          {
+            name: "Patente atual",
+            value: progress.currentRank.name,
+            inline: true,
+          }
+        )
+        .setColor(0x5865f2)
+        .setTimestamp();
+
+      if (progress.nextRank) {
+        embed.addFields(
+          {
+            name: "Próxima patente",
+            value: progress.nextRank.name,
+            inline: false,
+          },
+          {
+            name: "Falta",
+            value: `${formatNumber(progress.remainingXp)} XP`,
+            inline: true,
+          },
+          {
+            name: "Progresso",
+            value: `${progress.progressPercent.toFixed(1)}%`,
+            inline: true,
+          }
+        );
+      } else {
+        embed.addFields({
+          name: "Status",
+          value: "🌠 Patente máxima alcançada",
           inline: false,
-        },
-        {
-          name: "Falta",
-          value: `${formatNumber(progress.remainingXp)} XP`,
-          inline: true,
-        },
-        {
-          name: "Progresso",
-          value: `${progress.progressPercent.toFixed(1)}%`,
-          inline: true,
-        }
-      );
-    } else {
-      embed.addFields({
-        name: "Status",
-        value: "🌠 Patente máxima alcançada",
-        inline: false,
-      });
-    }
+        });
+      }
 
-    await interaction.reply({
-      embeds: [embed],
-      flags: 64,
-    });
+      await interaction.editReply({
+        embeds: [embed],
+      });
+    } catch (error) {
+      console.error("Erro ao executar o comando rank:", error);
+
+      if (interaction.deferred || interaction.replied) {
+        await interaction
+          .editReply({
+            content: "❌ Ocorreu um erro ao mostrar o perfil lunar.",
+            embeds: [],
+          })
+          .catch(() => {});
+      } else {
+        await interaction
+          .reply({
+            content: "❌ Ocorreu um erro ao mostrar o perfil lunar.",
+            flags: 64,
+          })
+          .catch(() => {});
+      }
+    }
   },
 };

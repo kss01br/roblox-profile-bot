@@ -27,13 +27,7 @@ function getUserXp(entry) {
   if (typeof entry === "number") return entry;
   if (!entry || typeof entry !== "object") return 0;
 
-  return (
-    entry.xp ||
-    entry.totalXp ||
-    entry.experience ||
-    entry.points ||
-    0
-  );
+  return entry.xp || entry.totalXp || entry.experience || entry.points || 0;
 }
 
 module.exports = {
@@ -43,13 +37,14 @@ module.exports = {
 
   async execute(interaction) {
     try {
+      await interaction.deferReply({ flags: 64 });
+
       const xpData = readXpData();
       const entries = Object.entries(xpData);
 
       if (!entries.length) {
-        return await interaction.reply({
+        return await interaction.editReply({
           content: "Ainda não tem dados de XP salvos.",
-          ephemeral: true,
         });
       }
 
@@ -63,9 +58,8 @@ module.exports = {
         .slice(0, 10);
 
       if (!ranking.length) {
-        return await interaction.reply({
+        return await interaction.editReply({
           content: "Ainda não tem ninguém com XP para mostrar no ranking.",
-          ephemeral: true,
         });
       }
 
@@ -100,20 +94,26 @@ module.exports = {
         })
         .setTimestamp();
 
-      await interaction.reply({ embeds: [embed] });
+      await interaction.editReply({
+        embeds: [embed],
+      });
     } catch (error) {
       console.error("Erro no comando /rankingxp:", error);
 
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp({
-          content: "Ocorreu um erro ao mostrar o ranking de XP.",
-          ephemeral: true,
-        });
+      if (interaction.deferred || interaction.replied) {
+        await interaction
+          .editReply({
+            content: "❌ Ocorreu um erro ao mostrar o ranking de XP.",
+            embeds: [],
+          })
+          .catch(() => {});
       } else {
-        await interaction.reply({
-          content: "Ocorreu um erro ao mostrar o ranking de XP.",
-          ephemeral: true,
-        });
+        await interaction
+          .reply({
+            content: "❌ Ocorreu um erro ao mostrar o ranking de XP.",
+            flags: 64,
+          })
+          .catch(() => {});
       }
     }
   },

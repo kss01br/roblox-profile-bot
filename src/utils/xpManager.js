@@ -19,8 +19,14 @@ function ensureXpFile() {
 
 function readXpData() {
   ensureXpFile();
-  const raw = fs.readFileSync(xpFilePath, "utf8");
-  return JSON.parse(raw || "{}");
+
+  try {
+    const raw = fs.readFileSync(xpFilePath, "utf8");
+    return JSON.parse(raw || "{}");
+  } catch (error) {
+    console.error("Erro ao ler xp.json:", error);
+    return {};
+  }
 }
 
 function writeXpData(data) {
@@ -28,8 +34,42 @@ function writeXpData(data) {
   fs.writeFileSync(xpFilePath, JSON.stringify(data, null, 2), "utf8");
 }
 
+function isFlatUserEntry(entry) {
+  return (
+    typeof entry === "number" ||
+    (entry &&
+      typeof entry === "object" &&
+      ("xp" in entry ||
+        "totalXp" in entry ||
+        "experience" in entry ||
+        "points" in entry))
+  );
+}
+
+function getEntryXp(entry) {
+  if (typeof entry === "number") return entry;
+  if (!entry || typeof entry !== "object") return 0;
+
+  return entry.xp || entry.totalXp || entry.experience || entry.points || 0;
+}
+
+function getEntryMessages(entry) {
+  if (!entry || typeof entry !== "object") return 0;
+  return entry.messages || 0;
+}
+
+function getEntryVoiceMinutes(entry) {
+  if (!entry || typeof entry !== "object") return 0;
+  return entry.voiceMinutes || 0;
+}
+
+function getEntryUpdatedAt(entry) {
+  if (!entry || typeof entry !== "object") return null;
+  return entry.updatedAt || null;
+}
+
 function ensureUser(data, guildId, userId) {
-  if (!data[guildId]) {
+  if (!data[guildId] || typeof data[guildId] !== "object" || isFlatUserEntry(data[guildId])) {
     data[guildId] = {};
   }
 
@@ -137,16 +177,34 @@ function awardVoiceXp(guildId, userId, minutes = 1) {
 function getUserXp(guildId, userId) {
   const data = readXpData();
 
-  if (!data[guildId] || !data[guildId][userId]) {
+  if (data[guildId] && data[guildId][userId]) {
+    const entry = data[guildId][userId];
+
     return {
-      xp: 0,
-      messages: 0,
-      voiceMinutes: 0,
-      updatedAt: null,
+      xp: getEntryXp(entry),
+      messages: getEntryMessages(entry),
+      voiceMinutes: getEntryVoiceMinutes(entry),
+      updatedAt: getEntryUpdatedAt(entry),
     };
   }
 
-  return data[guildId][userId];
+  if (data[userId] !== undefined) {
+    const entry = data[userId];
+
+    return {
+      xp: getEntryXp(entry),
+      messages: getEntryMessages(entry),
+      voiceMinutes: getEntryVoiceMinutes(entry),
+      updatedAt: getEntryUpdatedAt(entry),
+    };
+  }
+
+  return {
+    xp: 0,
+    messages: 0,
+    voiceMinutes: 0,
+    updatedAt: null,
+  };
 }
 
 function getCurrentRank(xp) {
@@ -201,13 +259,26 @@ function getRankProgress(xp) {
 
 function getGuildRanking(guildId, limit = 10) {
   const data = readXpData();
-  const guildData = data[guildId] || {};
 
-  return Object.entries(guildData)
+  if (data[guildId] && typeof data[guildId] === "object" && !isFlatUserEntry(data[guildId])) {
+    const guildData = data[guildId] || {};
+
+    return Object.entries(guildData)
+      .map(([userId, stats]) => ({
+        userId,
+        xp: getEntryXp(stats),
+        rank: getCurrentRank(getEntryXp(stats)),
+      }))
+      .sort((a, b) => b.xp - a.xp)
+      .slice(0, limit);
+  }
+
+  return Object.entries(data)
+    .filter(([, entry]) => isFlatUserEntry(entry))
     .map(([userId, stats]) => ({
       userId,
-      xp: stats.xp || 0,
-      rank: getCurrentRank(stats.xp || 0),
+      xp: getEntryXp(stats),
+      rank: getCurrentRank(getEntryXp(stats)),
     }))
     .sort((a, b) => b.xp - a.xp)
     .slice(0, limit);
