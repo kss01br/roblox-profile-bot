@@ -5,7 +5,7 @@ module.exports = [
   { name: "Paredão da Sofrência", placeId: 107964334009653, universeId: 9677309050 },
   { name: "Baile dos CRIAS", placeId: 82740809207420, universeId: 10032532027 },
   { name: "Baile dos Mídia", placeId: 128854023954804, universeId: 9906065139 },
-  { name: "FESTA DA PARMA", placeId: 116794227775075, universeId: 9906341704 },
+  { name: "FESTA DA PARMA", placeId: 134407306633501, universeId: 9932771602 },
   { name: "Baile da Aranha", placeId: 105156791754204, universeId: 9934320222 },
   { name: "Baile da Capital", placeId: 73019695101412, universeId: 9837922613 },
   { name: "BAILE DO PANTÃO OFC", placeId: 128148566837740, universeId: 10013875025 },
@@ -18,4 +18,5 @@ module.exports = [
   { name: "FAVELA ENCANTADA", placeId: 113730732862783, universeId: 10013390393 },
   { name: "Baile do Batô", placeId: 77899930710643, universeId: 8329194086 },
   { name: "Paredão da Bahia", placeId: 98535619230669, universeId: 9318755384 },
+  { name: "Rua da Feira", placeId: 91329597355142, universeId: 9930886024 },
 ];
