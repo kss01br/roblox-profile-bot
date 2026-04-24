@@ -1,9 +1,19 @@
-const { REST, Routes } = require("discord.js");
 require("dotenv").config();
+
+const { REST, Routes } = require("discord.js");
 const fs = require("fs");
 const path = require("path");
 
-const { CLIENT_ID, GUILD_ID, DISCORD_TOKEN } = require("./src/config/env");
+// 🔥 Pega direto do .env (sem depender de outro arquivo)
+const CLIENT_ID = process.env.CLIENT_ID;
+const GUILD_ID = process.env.GUILD_ID;
+const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+
+// 🔎 Logs pra conferir se está correto
+console.log("====================================");
+console.log("CLIENT_ID:", CLIENT_ID);
+console.log("GUILD_ID:", GUILD_ID);
+console.log("====================================");
 
 const commands = [];
 const commandsPath = path.join(__dirname, "src", "commands");
