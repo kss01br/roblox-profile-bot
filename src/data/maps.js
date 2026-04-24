@@ -19,4 +19,5 @@ module.exports = [
   { name: "Baile do Batô", placeId: 77899930710643, universeId: 8329194086 },
   { name: "Paredão da Bahia", placeId: 98535619230669, universeId: 9318755384 },
   { name: "Rua da Feira", placeId: 91329597355142, universeId: 9930886024 },
+   { name: "Baile Do Trem", placeId: 109079159390435, universeId: 10053762058 },
 ];
